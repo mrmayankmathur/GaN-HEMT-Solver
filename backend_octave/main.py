@@ -15,7 +15,7 @@ app.add_middleware(
     CORSMiddleware,
     # Allow all origins for easier cloud deployment, or specify your frontend's Vercel URL here later
     allow_origins=["*"],
-    allow_credentials=True,
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
