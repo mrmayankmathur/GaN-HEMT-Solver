@@ -1,10 +1,8 @@
-# Use an official Python runtime as a parent image
-FROM python:3.10-slim
+FROM python:3.10-bookworm
 
 # Install GNU Octave and its dependencies
 RUN apt-get update && apt-get install -y \
     octave \
-    liboctave-dev \
     && rm -rf /var/lib/apt/lists/*
 
 # Set the working directory to the project root
