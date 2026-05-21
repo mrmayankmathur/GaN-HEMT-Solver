@@ -17,6 +17,11 @@ jobs:
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
         run: |
+          # Remove frontend and binary files so Hugging Face doesn't reject the push
+          rm -rf frontend/
+          find . -name "*.png" -type f -delete
+          find . -name "*.pdf" -type f -delete
+          
           rm -rf .git
           git init
           git branch -M main
