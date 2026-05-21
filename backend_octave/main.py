@@ -28,6 +28,7 @@ project_path = os.path.abspath(
 )
 
 try:
+    octave.eval("more off")
     octave.addpath(project_path)
     print(f"✅ Octave Path Linked: {project_path}")
 except Exception as e:
@@ -45,7 +46,8 @@ class LayerInput(BaseModel):
 
 
 @app.post("/simulate")
-async def simulate(layers: List[LayerInput]):
+def simulate(layers: List[LayerInput]):
+    print(f"📥 Received POST /simulate with {len(layers)} layers")
     try:
         formatted = [
             {

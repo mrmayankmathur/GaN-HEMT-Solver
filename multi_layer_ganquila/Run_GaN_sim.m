@@ -100,12 +100,21 @@ function [z_out, Ec_out, Ev_out, n_out, ns_out] = Run_GaN_sim(input_layers)
         lower_diag = [0; super_diag(1:end-1)];
         H_sparse = spdiags([lower_diag, main_diag, super_diag], -1:1, len, len);
         
-        sigma = min(Ec - phi) - 0.1; 
-        [psi_internal, E_eig] = eigs(H_sparse, num_subbands, sigma);
-        E_vals = diag(E_eig);
+        % Optimization: For small N, full eig() is MUCH faster than iterative eigs()
+        [V_full, D_full] = eig(full(H_sparse));
+        diag_D = diag(D_full);
+        
+        % Sort eigenvalues and eigenvectors
+        [E_vals_sorted, sort_idx] = sort(diag_D);
+        V_sorted = V_full(:, sort_idx);
+        
+        % Take the lowest 'num_subbands' (e.g. 10) eigenvalues
+        actual_subbands = min(num_subbands, len);
+        E_vals = E_vals_sorted(1:actual_subbands);
+        psi_internal = V_sorted(:, 1:actual_subbands);
         
         psi = zeros(N, num_subbands);
-        psi(2:end-1, :) = psi_internal;
+        psi(2:end-1, 1:actual_subbands) = psi_internal;
         
         % --- C. DENSITY ---
         n_new = zeros(N,1);
@@ -113,7 +122,7 @@ function [z_out, Ec_out, Ev_out, n_out, ns_out] = Run_GaN_sim(input_layers)
         [~, max_idx] = max(psi(:,1));
         meff_well = meff(max_idx);
         
-        for k = 1:num_subbands
+        for k = 1:actual_subbands
             arg = (Ef - E_vals(k))/kT;
             occ = max(arg, 0) + log(1 + exp(-abs(arg)));
             prefactor = (meff_well * 4.17e14 * 1e-16) * kT; 
