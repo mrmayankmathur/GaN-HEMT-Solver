@@ -16,4 +16,13 @@ jobs:
       - name: Push to hub
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
-        run: git push --force https://mrmayankmathur:$HF_TOKEN@huggingface.co/spaces/mrmayankmathur/gan-hemt-solver-backend HEAD:main
+        run: |
+          rm -rf .git
+          git init
+          git branch -M main
+          git config user.name "github-actions"
+          git config user.email "github-actions@github.com"
+          git add .
+          git commit -m "Auto-sync from GitHub"
+          git remote add origin "https://mrmayankmathur:$HF_TOKEN@huggingface.co/spaces/mrmayankmathur/gan-hemt-solver-backend"
+          git push --force origin main
