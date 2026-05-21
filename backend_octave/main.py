@@ -45,7 +45,7 @@ class LayerInput(BaseModel):
 
 
 @app.post("/simulate")
-async def simulate(layers: List[LayerInput]):
+def simulate(layers: List[LayerInput]):
     try:
         formatted = [
             {
