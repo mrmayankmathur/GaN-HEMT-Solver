@@ -90,7 +90,7 @@ function App() {
               className="h-10 w-auto object-contain hover:scale-105 transition-transform duration-300 drop-shadow-sm"
             />
 
-            <div className="hidden lg:flex items-center justify-center bg-white/90 dark:bg-[#18181b]/90 rounded-full px-8 py-3.5 shadow-[0_4px_20px_rgb(0,0,0,0.03)] dark:shadow-none border border-transparent dark:border-white/5 transition-all w-[550px] backdrop-blur-md">
+            <div className="hidden lg:flex items-center justify-center bg-white/90 dark:bg-[#18181b]/90 rounded-full px-8 py-3.5 shadow-[0_4px_20px_rgb(0,0,0,0.03)] dark:shadow-none border border-transparent dark:border-white/5 transition-all w-137.5 backdrop-blur-md">
               <p className="text-center text-[13px] font-semibold text-slate-600 dark:text-slate-300 tracking-wide">
                 Self-Consistent Schrödinger-Poisson Solver for AlGaN/GaN HEMT
               </p>
@@ -159,13 +159,13 @@ function App() {
         {/* WORKSPACE (Now spans full height behind header) */}
         <main className="flex-1 flex overflow-hidden w-full h-full relative">
           {/* Left Sidebar (Has top padding so content starts below header, but scrolls under it) */}
-          <aside className="w-[400px] bg-white/65 dark:bg-[#0c0c0e]/40 backdrop-blur-xl border-r border-white/40 dark:border-white/5 flex flex-col overflow-y-auto no-scrollbar shrink-0 animate-slide-up z-10 relative shadow-[4px_0_24px_rgb(0,0,0,0.02)] pt-[90px] pb-8">
+          <aside className="w-100 bg-white/65 dark:bg-[#0c0c0e]/40 backdrop-blur-xl border-r border-white/40 dark:border-white/5 flex flex-col overflow-y-auto no-scrollbar shrink-0 animate-slide-up z-10 relative shadow-[4px_0_24px_rgb(0,0,0,0.02)] pt-22.5 pb-8">
             <LayerStackEditor />
             <SolverControls />
           </aside>
 
           {/* Wrapper to handle top padding so the Export snapshot doesn't include empty space */}
-          <div className="flex-1 flex flex-col pt-[90px] pb-8 px-8 overflow-hidden">
+          <div className="flex-1 flex flex-col pt-22.5 pb-8 px-8 overflow-hidden">
             <section
               id="charts-export-area"
               className="flex-1 flex flex-col gap-6 overflow-hidden"
