@@ -9,7 +9,11 @@ function [z_out, Ec_out, Ev_out, n_out, ns_out] = Run_GaN_sim(input_layers)
     dz = 2.5;            % GRID SPACING in Angstroms
     
     % FIX: Ensure variable names match the function input
-    layers = [input_layers{:}];
+    if iscell(input_layers)
+        layers = [input_layers{:}];
+    else
+        layers = input_layers;
+    end
     
     %% 2. DYNAMIC DOMAIN ASSEMBLY
     z = []; Ec = []; Ev = []; eps_r = []; meff = []; Nd = []; P_total = [];
