@@ -134,28 +134,73 @@ export const useSimulationStore = create<SimulationState>((set, get) => ({
     try {
       const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8001";
       console.log("📡 Simulation API URL:", API_URL);
-      const response = await fetch(`${API_URL}/simulate`, {
+
+      // Step 1: Start the simulation — returns a job_id immediately
+      const startResponse = await fetch(`${API_URL}/simulate`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(get().layers),
       });
 
-      // Throw an error if the status is 4xx or 5xx
-      if (!response.ok) {
-        const errBody = await response.text().catch(() => "");
+      if (!startResponse.ok) {
+        const errBody = await startResponse.text().catch(() => "");
         throw new Error(
-          `Server responded with ${response.status}: ${errBody}`
+          `Server responded with ${startResponse.status}: ${errBody}`
         );
       }
 
-      const data = await response.json();
-      set({ results: { ...data, isRunning: false } });
+      const { job_id } = await startResponse.json();
+      console.log(`📋 Job started: ${job_id}`);
+
+      // Step 2: Poll for results every 3 seconds
+      const POLL_INTERVAL = 3000;
+      const MAX_POLLS = 200; // ~10 minutes max wait
+
+      for (let i = 0; i < MAX_POLLS; i++) {
+        await new Promise((resolve) => setTimeout(resolve, POLL_INTERVAL));
+
+        const pollResponse = await fetch(`${API_URL}/result/${job_id}`);
+
+        if (!pollResponse.ok) {
+          if (pollResponse.status === 404) {
+            throw new Error("Job not found on server. It may have expired.");
+          }
+          const errBody = await pollResponse.text().catch(() => "");
+          throw new Error(
+            `Server error ${pollResponse.status}: ${errBody}`
+          );
+        }
+
+        const data = await pollResponse.json();
+
+        if (data.status === "pending") {
+          console.log(`⏳ Poll ${i + 1}: still running...`);
+          continue;
+        }
+
+        // Simulation complete!
+        console.log("✅ Simulation complete!");
+        set({
+          results: {
+            z: data.z,
+            ec: data.ec,
+            ev: data.ev,
+            n: data.n,
+            ns: data.ns,
+            isRunning: false,
+          },
+        });
+        return;
+      }
+
+      throw new Error(
+        "Simulation timed out after 10 minutes. Please try again."
+      );
     } catch (error: unknown) {
       const msg =
         error instanceof Error ? error.message : "Unknown error occurred";
       console.error("❌ Simulation failed:", msg);
       alert(`Simulation failed: ${msg}`);
-      // Reset results so the UI returns to the "Run simulation" prompt
       set({ results: null });
     }
   },

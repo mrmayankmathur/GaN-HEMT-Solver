@@ -78,8 +78,8 @@ function App() {
     >
       <div className="h-full w-full flex flex-col bg-[#f0f2eb] dark:bg-[#0c0c0e] text-slate-800 dark:text-gray-100 transition-colors duration-500 relative z-0">
         {/* Ambient Background Glow */}
-        <div className="absolute top-[-10%] left-[-5%] w-[500px] h-[500px] bg-blue-500/20 dark:bg-blue-500/10 rounded-full blur-[120px] -z-10 pointer-events-none"></div>
-        <div className="absolute bottom-[-10%] right-[-5%] w-[600px] h-[600px] bg-indigo-500/20 dark:bg-indigo-500/10 rounded-full blur-[150px] -z-10 pointer-events-none"></div>
+        <div className="absolute top-[-10%] left-[-5%] w-125 h-125 bg-blue-500/20 dark:bg-blue-500/10 rounded-full blur-[120px] -z-10 pointer-events-none"></div>
+        <div className="absolute bottom-[-10%] right-[-5%] w-150 h-150 bg-indigo-500/20 dark:bg-indigo-500/10 rounded-full blur-[150px] -z-10 pointer-events-none"></div>
 
         {/* --- HEADER --- */}
         <header className="fixed top-0 left-0 right-0 flex justify-between items-center px-8 py-2 z-50 transition-all duration-500 backdrop-blur-[6px] bg-white/40 dark:bg-[#0c0c0e]/60 border-b border-white/40 dark:border-white/5 shadow-[0_4px_30px_rgb(0,0,0,0.02)]">
