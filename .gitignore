@@ -1,1 +1,27 @@
-venv/\nnode_modules/\n.DS_Store\n__pycache__/\n*.pyc\n.env
+# Environments
+venv/
+.venv/
+env/
+.env
+.env.*
+
+# Node
+node_modules/
+frontend/node_modules/
+
+# Mac
+.DS_Store
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.dll
+*.exe
+*.pyd
+*.pdb
+
+# Large/Binary files
+*.pdf
+*.tar.gz
