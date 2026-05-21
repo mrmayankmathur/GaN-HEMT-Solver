@@ -133,22 +133,29 @@ export const useSimulationStore = create<SimulationState>((set, get) => ({
 
     try {
       const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8001";
+      console.log("📡 Simulation API URL:", API_URL);
       const response = await fetch(`${API_URL}/simulate`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(get().layers),
       });
 
-      // NEW: Throw an error if the status is 4xx or 5xx
+      // Throw an error if the status is 4xx or 5xx
       if (!response.ok) {
-        throw new Error(`Server responded with ${response.status}`);
+        const errBody = await response.text().catch(() => "");
+        throw new Error(
+          `Server responded with ${response.status}: ${errBody}`
+        );
       }
 
       const data = await response.json();
       set({ results: { ...data, isRunning: false } });
-    } catch (error) {
-      console.error("Simulation failed:", error);
-      // Reset results to null so the UI returns to the "Run simulation" prompt safely
+    } catch (error: unknown) {
+      const msg =
+        error instanceof Error ? error.message : "Unknown error occurred";
+      console.error("❌ Simulation failed:", msg);
+      alert(`Simulation failed: ${msg}`);
+      // Reset results so the UI returns to the "Run simulation" prompt
       set({ results: null });
     }
   },
