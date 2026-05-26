@@ -138,8 +138,9 @@ function [z_out, Ec_out, Ev_out, n_out, ns_out, slope_out] = Run_GaN_sim(input_l
     Ev_out = (Ev - phi)';
     n_out = y_cm3';
     
-    % Compute the average slope of the energy band diagram (Ec)
-    slope_out = (Ec_out(end) - Ec_out(1)) / (z_out(end) - z_out(1));
+    % Compute the average internal electric field (V/cm) from the energy band diagram (Ec)
+    % Note: 1 eV/nm = 1e7 V/cm
+    slope_out = ((Ec_out(end) - Ec_out(1)) / (z_out(end) - z_out(1))) * 1e4;
 
     % Optional: Diagnostic message inside the block
     if iter == 100

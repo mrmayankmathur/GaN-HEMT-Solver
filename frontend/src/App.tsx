@@ -1,8 +1,22 @@
 import { useState } from "react";
-import { Download, Moon, Sun, Play, ChevronDown, FileImage, FileSpreadsheet } from "lucide-react";
-import { Menu, MenuButton, MenuItem, MenuItems, Transition } from '@headlessui/react';
+import {
+  Download,
+  Moon,
+  Sun,
+  Play,
+  ChevronDown,
+  FileImage,
+  FileSpreadsheet,
+} from "lucide-react";
+import {
+  Menu,
+  MenuButton,
+  MenuItem,
+  MenuItems,
+  Transition,
+} from "@headlessui/react";
 
-import { Fragment } from 'react';
+import { Fragment } from "react";
 import { LayerStackEditor } from "./components/LayerStackEditor";
 import { SolverControls } from "./components/SolverControls";
 import { BandDiagramChart } from "./components/BandDiagramChart";
@@ -83,10 +97,10 @@ function App() {
     // Export CSV
     let csvContent = "z(nm),Ec(eV),Ev(eV),n(cm^-3)\n";
     for (let i = 0; i < results.z.length; i++) {
-        csvContent += `${results.z[i]},${results.ec[i]},${results.ev[i]},${results.n[i]}\n`;
+      csvContent += `${results.z[i]},${results.ec[i]},${results.ev[i]},${results.n[i]}\n`;
     }
 
-    const csvBlob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const csvBlob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
     const csvUrl = URL.createObjectURL(csvBlob);
     const csvLink = document.createElement("a");
     csvLink.href = csvUrl;
@@ -124,18 +138,19 @@ function App() {
           </div>
 
           <div className="flex items-center gap-4">
-
             {/* Export Dropdown */}
             <Menu as="div" className="relative inline-block text-left">
               <div>
                 <MenuButton
-                  disabled={!results || results.isRunning || results.z.length === 0}
+                  disabled={
+                    !results || results.isRunning || results.z.length === 0
+                  }
                   className="h-11 px-4 bg-white/90 dark:bg-[#18181b]/90 rounded-full flex items-center justify-center gap-2 shadow-[0_4px_20px_rgb(0,0,0,0.04)] dark:shadow-none border border-transparent dark:border-white/5 text-slate-700 dark:text-slate-300 hover:text-black dark:hover:text-white transition-all duration-300 disabled:opacity-40 opacity-90 hover:opacity-100 disabled:cursor-not-allowed backdrop-blur-md hover:cursor-pointer text-sm font-medium"
                 >
                   {isCapturing ? (
                     <span className="flex items-center gap-2">
-                       <span className="animate-spin h-4 w-4 border-2 border-slate-700 dark:border-slate-300 border-t-transparent rounded-full"></span>
-                       Exporting...
+                      <span className="animate-spin h-4 w-4 border-2 border-slate-700 dark:border-slate-300 border-t-transparent rounded-full"></span>
+                      Exporting...
                     </span>
                   ) : (
                     <>
@@ -162,10 +177,15 @@ function App() {
                         <button
                           onClick={handleExportPNG}
                           className={`${
-                            focus ? 'bg-blue-500/10 text-blue-600 dark:text-blue-400' : 'text-slate-700 dark:text-slate-300'
+                            focus
+                              ? "bg-blue-500/10 text-blue-600 dark:text-blue-400"
+                              : "text-slate-700 dark:text-slate-300"
                           } group flex w-full items-center rounded-xl px-3 py-2.5 text-sm font-medium transition-colors`}
                         >
-                          <FileImage className="mr-3 h-4 w-4 opacity-70 group-hover:opacity-100" aria-hidden="true" />
+                          <FileImage
+                            className="mr-3 h-4 w-4 opacity-70 group-hover:opacity-100"
+                            aria-hidden="true"
+                          />
                           Save as PNG
                         </button>
                       )}
@@ -175,10 +195,15 @@ function App() {
                         <button
                           onClick={handleExportCSV}
                           className={`${
-                            focus ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400' : 'text-slate-700 dark:text-slate-300'
+                            focus
+                              ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
+                              : "text-slate-700 dark:text-slate-300"
                           } group flex w-full items-center rounded-xl px-3 py-2.5 text-sm font-medium transition-colors`}
                         >
-                          <FileSpreadsheet className="mr-3 h-4 w-4 opacity-70 group-hover:opacity-100" aria-hidden="true" />
+                          <FileSpreadsheet
+                            className="mr-3 h-4 w-4 opacity-70 group-hover:opacity-100"
+                            aria-hidden="true"
+                          />
                           Export Data (CSV)
                         </button>
                       )}
@@ -245,23 +270,28 @@ function App() {
           </aside>
 
           {/* Wrapper to handle top padding so the Export snapshot doesn't include empty space */}
-          <div className="flex-1 flex flex-col pt-22.5 pb-8 px-8 overflow-hidden">
+          <div className="flex-1 flex flex-col pt-22.5 pb-6 px-8 overflow-hidden">
             <section
               id="charts-export-area"
               className="flex-1 flex flex-col gap-6 overflow-hidden"
             >
               <div className="flex-1 bg-white dark:bg-[#121212] shadow-[0_8px_30px_rgb(0,0,0,0.04)] dark:shadow-none border border-transparent dark:border-white/5 rounded-3xl flex flex-col overflow-hidden">
-                <div className="px-6 py-4 border-b border-slate-100 dark:border-gray-800/50 flex items-center justify-between">
+                <div className="px-6 py-2.5 border-b border-slate-100 dark:border-gray-800/50 text-xs font-bold text-slate-500 dark:text-gray-400 tracking-widest flex items-center justify-between">
                   <span className="text-xs font-bold text-slate-500 dark:text-gray-400 uppercase tracking-widest">
                     Energy Band Diagram (EBD)
                   </span>
                   {results && !results.isRunning && (
-                    <div className="flex bg-slate-100 dark:bg-gray-800 rounded-lg px-3 py-1 items-center gap-2">
-                      <span className="text-[10px] uppercase font-bold text-slate-500">
-                        Avg Slope:
-                      </span>
-                      <span className="text-xs font-mono font-bold text-blue-500">
-                        {results.slope !== undefined ? results.slope.toFixed(4) : "---"}
+                    <div className="flex flex-col items-center rounded-2xl px-3 py-1 bg-black/5 dark:bg-white/5">
+                      <div>
+                        <span className="text-[10px] uppercase font-bold text-slate-500">
+                          Average Electric Field:
+                        </span>
+                      </div>
+                      <span className="text-sm font-mono font-bold text-blue-500">
+                        {results.slope !== undefined
+                          ? formatScientific(Math.abs(results.slope))
+                          : "---"}{" "}
+                        MV/cm
                       </span>
                     </div>
                   )}
@@ -272,19 +302,19 @@ function App() {
               </div>
 
               <div className="h-72 bg-white dark:bg-[#121212] shadow-[0_8px_30px_rgb(0,0,0,0.04)] dark:shadow-none border border-transparent dark:border-white/5 rounded-3xl flex flex-col overflow-hidden shrink-0">
-                <div className="px-6 py-2.5 border-b border-slate-100 dark:border-gray-800/50 text-xs font-bold text-slate-500 dark:text-gray-400 uppercase tracking-widest flex items-center justify-between">
-                  Electron Density n(z)
+                <div className="px-6 py-2.5 border-b border-slate-100 dark:border-gray-800/50 text-xs font-bold text-slate-500 dark:text-gray-400 tracking-widest flex items-center justify-between">
+                  <div className="uppercase">Electron Density n(z)</div>
                   <div className="flex items-center gap-6">
                     {results && !results.isRunning && (
                       <div className="flex flex-col items-center rounded-2xl px-3 py-1 bg-black/5 dark:bg-white/5">
-                        <div>
+                        <div className="mb-px">
                           <span className="text-[10px] uppercase font-bold text-slate-500">
-                            Sheet Density (n_s)
+                            Sheet Density (n<sub>s</sub>)
                           </span>
                         </div>
                         {/* Change this line */}
                         <span className="text-sm font-mono font-bold text-blue-500">
-                          {formatScientific(results?.ns)}
+                          {formatScientific(results?.ns)} cm<sup>-2</sup>
                         </span>
                       </div>
                     )}
