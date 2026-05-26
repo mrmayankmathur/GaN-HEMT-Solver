@@ -30,9 +30,13 @@ class LayerInput(BaseModel):
     thickness: float
     ndVal: float
 
+class SimulationRequest(BaseModel):
+    layers: List[LayerInput]
+    pinningPotential: float = 1.7
+
 
 @app.post("/simulate")
-async def simulate(layers: List[LayerInput]):
+async def simulate(req: SimulationRequest):
     try:
         formatted = [
             {
@@ -40,11 +44,11 @@ async def simulate(layers: List[LayerInput]):
                 "thickness": float(l.thickness * 10),
                 "Nd_val": float(l.ndVal),
                 "N_trap": 0.0
-            } for l in layers
+            } for l in req.layers
         ]
 
-        # Unpack 5 variables (z, ec, ev, n, ns) from MATLAB function
-        z, ec, ev, n, ns = eng.Run_GaN_sim(formatted, nargout=5)
+        # Unpack 6 variables (z, ec, ev, n, ns, slope) from MATLAB function
+        z, ec, ev, n, ns, slope = eng.Run_GaN_sim(formatted, req.pinningPotential, nargout=6)
 
         def to_list(ml_array):
             try:
@@ -57,7 +61,8 @@ async def simulate(layers: List[LayerInput]):
             "ec": to_list(ec),
             "ev": to_list(ev),
             "n": to_list(n),
-            "ns": float(ns)
+            "ns": float(ns),
+            "slope": float(slope)
         }
     except Exception as e:
         print(f"❌ Backend Error: {e}")

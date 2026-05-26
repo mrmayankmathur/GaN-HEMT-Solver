@@ -1,8 +1,13 @@
-function [z_out, Ec_out, Ev_out, n_out, ns_out] = Run_GaN_sim(input_layers)
+function [z_out, Ec_out, Ev_out, n_out, ns_out, slope_out] = Run_GaN_sim(input_layers, phi_b)
     % Run_GaN_sim: Self-consistent solver for HEMT stacks
-    
+
     global aquila_control
-    aquila_control.verbose = 0; 
+    aquila_control.verbose = 0;
+
+    if nargin < 2
+        phi_b = 1.7; % Default pinning potential if not provided
+    end
+
     
     %% 1. DEFINE GENERIC LAYER SCHEMA & GLOBALS
     a_substrate = 3.189; % Angstroms (GaN)
@@ -86,8 +91,8 @@ function [z_out, Ec_out, Ev_out, n_out, ns_out] = Run_GaN_sim(input_layers)
             A(i,i-1) = e_avg_m;
             b(i) = -(Nd_unit(i) - n_conc(i) + rho_pol(i)) * dz^2 * 180.95;
         end
-        A(1,1) = 1; b(1) = -0.5; 
-        A(N,N) = 1; A(N,N-1) = -1; b(N) = 0; 
+        A(1,1) = 1; b(1) = -phi_b;
+        A(N,N) = 1; A(N,N-1) = -1; b(N) = 0;
         
         phi_new = A \ b;
         phi = (1-damping)*phi + damping*phi_new;
@@ -133,6 +138,9 @@ function [z_out, Ec_out, Ev_out, n_out, ns_out] = Run_GaN_sim(input_layers)
     Ev_out = (Ev - phi)';
     n_out = y_cm3';
     
+    % Compute the average slope of the energy band diagram (Ec)
+    slope_out = (Ec_out(end) - Ec_out(1)) / (z_out(end) - z_out(1));
+
     % Optional: Diagnostic message inside the block
     if iter == 100
         fprintf('Run_GaN_sim: Solver Complete.\n');

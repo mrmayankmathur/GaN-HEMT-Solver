@@ -62,7 +62,11 @@ def to_list(arr):
         return list(arr)
 
 
-def _run_simulation(job_id: str, formatted: list):
+class SimulationRequest(BaseModel):
+    layers: List[LayerInput]
+    pinningPotential: float = 1.7
+
+def _run_simulation(job_id: str, formatted: list, phi_b: float):
     """
     Run the Octave simulation synchronously.
     FastAPI's BackgroundTasks runs sync functions in a thread pool via anyio,
@@ -75,7 +79,7 @@ def _run_simulation(job_id: str, formatted: list):
         print(f"🔬 [{job_id}] Simulation started...")
 
         # Use the global octave instance — safe because we run one sim at a time
-        z, ec, ev, n, ns = octave.Run_GaN_sim(formatted, nout=5)
+        z, ec, ev, n, ns, slope = octave.Run_GaN_sim(formatted, phi_b, nout=6)
 
         result = {
             "z": to_list(z),
@@ -83,6 +87,7 @@ def _run_simulation(job_id: str, formatted: list):
             "ev": to_list(ev),
             "n": to_list(n),
             "ns": float(ns),
+            "slope": float(slope) if slope is not None else 0.0,
         }
         jobs[job_id] = {"status": "complete", "result": result, "error": None}
         print(f"✅ [{job_id}] Simulation complete!")
@@ -94,7 +99,7 @@ def _run_simulation(job_id: str, formatted: list):
 
 
 @app.post("/simulate")
-def simulate(layers: List[LayerInput], background_tasks: BackgroundTasks):
+def simulate(req: SimulationRequest, background_tasks: BackgroundTasks):
     """Start simulation as a background task and return a job ID immediately."""
     formatted = [
         {
@@ -103,14 +108,14 @@ def simulate(layers: List[LayerInput], background_tasks: BackgroundTasks):
             "Nd_val": float(l.ndVal),
             "N_trap": 0.0,
         }
-        for l in layers
+        for l in req.layers
     ]
 
     job_id = str(uuid.uuid4())
     jobs[job_id] = {"status": "pending", "result": None, "error": None}
 
     # FastAPI BackgroundTasks runs sync functions in a thread pool automatically
-    background_tasks.add_task(_run_simulation, job_id, formatted)
+    background_tasks.add_task(_run_simulation, job_id, formatted, req.pinningPotential)
 
     print(f"📋 Job {job_id} queued, active jobs: {list(jobs.keys())}")
     return {"job_id": job_id}

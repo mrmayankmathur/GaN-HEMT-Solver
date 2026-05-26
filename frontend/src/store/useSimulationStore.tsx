@@ -6,6 +6,7 @@ export interface SimulationResult {
   ev: number[];
   n: number[];
   ns: number;
+  slope: number;
   isRunning: boolean;
 }
 
@@ -39,6 +40,7 @@ interface SimulationState {
   addLayer: () => void;
   removeLayer: (id: string) => void;
   runSimulation: () => Promise<void>;
+  setPinningPotential: (val: number) => void;
 }
 
 const initialLayers: Layer[] = [
@@ -90,10 +92,12 @@ export const useSimulationStore = create<SimulationState>((set, get) => ({
   numSubbands: 10,
   dampingFactor: 0.1,
   maxIterations: 100,
-  pinningPotential: 1.0,
+  pinningPotential: 1.7,
 
   toggleTheme: () =>
     set((state) => ({ theme: state.theme === "light" ? "dark" : "light" })),
+
+  setPinningPotential: (val: number) => set({ pinningPotential: val }),
 
   setSelectedLayer: (id) => set({ selectedLayerId: id }),
 
@@ -128,7 +132,7 @@ export const useSimulationStore = create<SimulationState>((set, get) => ({
     set((state) => ({
       results: state.results
         ? { ...state.results, isRunning: true }
-        : { z: [], ec: [], ev: [], n: [], ns: 0, isRunning: true },
+        : { z: [], ec: [], ev: [], n: [], ns: 0, slope: 0, isRunning: true },
     }));
 
     try {
@@ -139,13 +143,16 @@ export const useSimulationStore = create<SimulationState>((set, get) => ({
       const startResponse = await fetch(`${API_URL}/simulate`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(get().layers),
+        body: JSON.stringify({
+          layers: get().layers,
+          pinningPotential: get().pinningPotential,
+        }),
       });
 
       if (!startResponse.ok) {
         const errBody = await startResponse.text().catch(() => "");
         throw new Error(
-          `Server responded with ${startResponse.status}: ${errBody}`
+          `Server responded with ${startResponse.status}: ${errBody}`,
         );
       }
 
@@ -166,9 +173,7 @@ export const useSimulationStore = create<SimulationState>((set, get) => ({
             throw new Error("Job not found on server. It may have expired.");
           }
           const errBody = await pollResponse.text().catch(() => "");
-          throw new Error(
-            `Server error ${pollResponse.status}: ${errBody}`
-          );
+          throw new Error(`Server error ${pollResponse.status}: ${errBody}`);
         }
 
         const data = await pollResponse.json();
@@ -187,6 +192,7 @@ export const useSimulationStore = create<SimulationState>((set, get) => ({
             ev: data.ev,
             n: data.n,
             ns: data.ns,
+            slope: data.slope,
             isRunning: false,
           },
         });
@@ -194,7 +200,7 @@ export const useSimulationStore = create<SimulationState>((set, get) => ({
       }
 
       throw new Error(
-        "Simulation timed out after 10 minutes. Please try again."
+        "Simulation timed out after 10 minutes. Please try again.",
       );
     } catch (error: unknown) {
       const msg =

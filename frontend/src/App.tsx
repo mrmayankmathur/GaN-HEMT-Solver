@@ -1,4 +1,8 @@
-import { Download, Moon, Sun, Play } from "lucide-react";
+import { useState } from "react";
+import { Download, Moon, Sun, Play, ChevronDown, FileImage, FileSpreadsheet } from "lucide-react";
+import { Menu, MenuButton, MenuItem, MenuItems, Transition } from '@headlessui/react';
+
+import { Fragment } from 'react';
 import { LayerStackEditor } from "./components/LayerStackEditor";
 import { SolverControls } from "./components/SolverControls";
 import { BandDiagramChart } from "./components/BandDiagramChart";
@@ -27,19 +31,19 @@ const formatScientific = (value: number | undefined) => {
 
 function App() {
   const { theme, toggleTheme, results, runSimulation } = useSimulationStore();
+  const [isCapturing, setIsCapturing] = useState(false);
 
   // --- IMAGE EXPORT FUNCTION ---
-  const handleExport = async () => {
+  const handleExportPNG = async () => {
     if (!results || !results.z || results.z.length === 0) {
       alert("No simulation data available. Please run the simulation first.");
       return;
     }
 
     const chartContainer = document.getElementById("charts-export-area");
-    const exportBtn = document.getElementById("export-btn");
 
     if (chartContainer) {
-      if (exportBtn) exportBtn.innerHTML = "Capturing...";
+      setIsCapturing(true);
 
       try {
         console.log("Starting image capture...");
@@ -65,11 +69,33 @@ function App() {
         console.error("❌ Error capturing image:", error);
         alert("Failed to export image. Please check the browser console.");
       } finally {
-        if (exportBtn) {
-          exportBtn.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-download"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg>`;
-        }
+        setIsCapturing(false);
       }
     }
+  };
+
+  const handleExportCSV = () => {
+    if (!results || !results.z || results.z.length === 0) {
+      alert("No simulation data available. Please run the simulation first.");
+      return;
+    }
+
+    // Export CSV
+    let csvContent = "z(nm),Ec(eV),Ev(eV),n(cm^-3)\n";
+    for (let i = 0; i < results.z.length; i++) {
+        csvContent += `${results.z[i]},${results.ec[i]},${results.ev[i]},${results.n[i]}\n`;
+    }
+
+    const csvBlob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const csvUrl = URL.createObjectURL(csvBlob);
+    const csvLink = document.createElement("a");
+    csvLink.href = csvUrl;
+    csvLink.download = "HEMT_Simulation_Data.csv";
+
+    document.body.appendChild(csvLink);
+    csvLink.click();
+    document.body.removeChild(csvLink);
+    URL.revokeObjectURL(csvUrl);
   };
 
   return (
@@ -98,15 +124,69 @@ function App() {
           </div>
 
           <div className="flex items-center gap-4">
-            <button
-              id="export-btn"
-              onClick={handleExport}
-              disabled={!results || results.isRunning || results.z.length === 0}
-              className="h-11 w-11 bg-white/90 dark:bg-[#18181b]/90 rounded-full flex items-center justify-center shadow-[0_4px_20px_rgb(0,0,0,0.04)] dark:shadow-none border border-transparent dark:border-white/5 text-slate-700 dark:text-slate-300 hover:text-black dark:hover:text-white hover:scale-105 transition-all duration-300 disabled:opacity-40 opacity-90 hover:opacity-100 disabled:cursor-not-allowed disabled:hover:scale-100 backdrop-blur-md hover:cursor-pointer"
-              title="Export Image"
-            >
-              <Download size={16} strokeWidth={2} />
-            </button>
+
+            {/* Export Dropdown */}
+            <Menu as="div" className="relative inline-block text-left">
+              <div>
+                <MenuButton
+                  disabled={!results || results.isRunning || results.z.length === 0}
+                  className="h-11 px-4 bg-white/90 dark:bg-[#18181b]/90 rounded-full flex items-center justify-center gap-2 shadow-[0_4px_20px_rgb(0,0,0,0.04)] dark:shadow-none border border-transparent dark:border-white/5 text-slate-700 dark:text-slate-300 hover:text-black dark:hover:text-white transition-all duration-300 disabled:opacity-40 opacity-90 hover:opacity-100 disabled:cursor-not-allowed backdrop-blur-md hover:cursor-pointer text-sm font-medium"
+                >
+                  {isCapturing ? (
+                    <span className="flex items-center gap-2">
+                       <span className="animate-spin h-4 w-4 border-2 border-slate-700 dark:border-slate-300 border-t-transparent rounded-full"></span>
+                       Exporting...
+                    </span>
+                  ) : (
+                    <>
+                      <Download size={16} strokeWidth={2} />
+                      Export
+                      <ChevronDown size={14} className="ml-1 opacity-70" />
+                    </>
+                  )}
+                </MenuButton>
+              </div>
+              <Transition
+                as={Fragment}
+                enter="transition ease-out duration-100"
+                enterFrom="transform opacity-0 scale-95"
+                enterTo="transform opacity-100 scale-100"
+                leave="transition ease-in duration-75"
+                leaveFrom="transform opacity-100 scale-100"
+                leaveTo="transform opacity-0 scale-95"
+              >
+                <MenuItems className="absolute right-0 mt-2 w-48 origin-top-right divide-y divide-slate-100 dark:divide-white/5 rounded-2xl bg-white/95 dark:bg-[#18181b]/95 shadow-lg ring-1 ring-black/5 dark:ring-white/10 focus:outline-none backdrop-blur-xl border border-white/40 dark:border-white/5 z-50">
+                  <div className="px-1 py-1 ">
+                    <MenuItem>
+                      {({ focus }) => (
+                        <button
+                          onClick={handleExportPNG}
+                          className={`${
+                            focus ? 'bg-blue-500/10 text-blue-600 dark:text-blue-400' : 'text-slate-700 dark:text-slate-300'
+                          } group flex w-full items-center rounded-xl px-3 py-2.5 text-sm font-medium transition-colors`}
+                        >
+                          <FileImage className="mr-3 h-4 w-4 opacity-70 group-hover:opacity-100" aria-hidden="true" />
+                          Save as PNG
+                        </button>
+                      )}
+                    </MenuItem>
+                    <MenuItem>
+                      {({ focus }) => (
+                        <button
+                          onClick={handleExportCSV}
+                          className={`${
+                            focus ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400' : 'text-slate-700 dark:text-slate-300'
+                          } group flex w-full items-center rounded-xl px-3 py-2.5 text-sm font-medium transition-colors`}
+                        >
+                          <FileSpreadsheet className="mr-3 h-4 w-4 opacity-70 group-hover:opacity-100" aria-hidden="true" />
+                          Export Data (CSV)
+                        </button>
+                      )}
+                    </MenuItem>
+                  </div>
+                </MenuItems>
+              </Transition>
+            </Menu>
 
             <button
               onClick={toggleTheme}
@@ -175,6 +255,16 @@ function App() {
                   <span className="text-xs font-bold text-slate-500 dark:text-gray-400 uppercase tracking-widest">
                     Energy Band Diagram (EBD)
                   </span>
+                  {results && !results.isRunning && (
+                    <div className="flex bg-slate-100 dark:bg-gray-800 rounded-lg px-3 py-1 items-center gap-2">
+                      <span className="text-[10px] uppercase font-bold text-slate-500">
+                        Avg Slope:
+                      </span>
+                      <span className="text-xs font-mono font-bold text-blue-500">
+                        {results.slope !== undefined ? results.slope.toFixed(4) : "---"}
+                      </span>
+                    </div>
+                  )}
                 </div>
                 <div className="flex-1 p-2 relative overflow-hidden bg-transparent">
                   <BandDiagramChart />
