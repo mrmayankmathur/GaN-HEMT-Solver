@@ -314,7 +314,7 @@ function App() {
                         </div>
                         {/* Change this line */}
                         <span className="text-sm font-mono font-bold text-blue-500">
-                          {formatScientific(results?.ns)} cm<sup>-2</sup>
+                          {formatScientific(results?.ns)} cm<sup>2</sup>
                         </span>
                       </div>
                     )}
