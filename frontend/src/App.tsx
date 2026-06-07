@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   Download,
   Moon,
@@ -7,6 +7,8 @@ import {
   ChevronDown,
   FileImage,
   FileSpreadsheet,
+  Target,
+  RotateCcw,
 } from "lucide-react";
 import {
   Menu,
@@ -23,6 +25,7 @@ import { BandDiagramChart } from "./components/BandDiagramChart";
 import { ElectronConcentrationChart } from "./components/ElectronConcentrationChart";
 import { useSimulationStore } from "./store/useSimulationStore";
 import { toPng } from "html-to-image";
+import { computeRegionMetrics } from "./utils/mathUtils";
 
 // Import the user-provided logo image
 import hemtLogo from "./assets/hemtLogo.png";
@@ -44,8 +47,44 @@ const formatScientific = (value: number | undefined) => {
 };
 
 function App() {
-  const { theme, toggleTheme, results, runSimulation } = useSimulationStore();
+  const {
+    theme,
+    toggleTheme,
+    results,
+    runSimulation,
+    isRegionSelectionMode,
+    setIsRegionSelectionMode,
+    ebdLimits,
+    setEbdLimits,
+    densityLimits,
+    setDensityLimits,
+  } = useSimulationStore();
+
   const [isCapturing, setIsCapturing] = useState(false);
+  const [ebdMetrics, setEbdMetrics] = useState<{
+    slope: number;
+    ns: number;
+  } | null>(null);
+  const [densityMetrics, setDensityMetrics] = useState<{
+    slope: number;
+    ns: number;
+  } | null>(null);
+
+  useEffect(() => {
+    if (isRegionSelectionMode && ebdLimits && results) {
+      setEbdMetrics(computeRegionMetrics(results, ebdLimits));
+    } else {
+      setEbdMetrics(null);
+    }
+  }, [isRegionSelectionMode, ebdLimits, results]);
+
+  useEffect(() => {
+    if (isRegionSelectionMode && densityLimits && results) {
+      setDensityMetrics(computeRegionMetrics(results, densityLimits));
+    } else {
+      setDensityMetrics(null);
+    }
+  }, [isRegionSelectionMode, densityLimits, results]);
 
   // --- IMAGE EXPORT FUNCTION ---
   const handleExportPNG = async () => {
@@ -111,6 +150,29 @@ function App() {
     document.body.removeChild(csvLink);
     URL.revokeObjectURL(csvUrl);
   };
+
+  const handleEbdInputChange = (index: 0 | 1, val: string) => {
+    const num = parseFloat(val);
+    if (ebdLimits && !isNaN(num)) {
+      const newLimits = [...ebdLimits] as [number, number];
+      newLimits[index] = num;
+      setEbdLimits(newLimits);
+    }
+  };
+
+  const handleDensityInputChange = (index: 0 | 1, val: string) => {
+    const num = parseFloat(val);
+    if (densityLimits && !isNaN(num)) {
+      const newLimits = [...densityLimits] as [number, number];
+      newLimits[index] = num;
+      setDensityLimits(newLimits);
+    }
+  };
+
+  const displayNs =
+    isRegionSelectionMode && densityMetrics ? densityMetrics.ns : results?.ns;
+  const displaySlope =
+    isRegionSelectionMode && ebdMetrics ? ebdMetrics.slope : results?.slope;
 
   return (
     <div
@@ -225,14 +287,28 @@ function App() {
               )}
             </button>
 
+            <button
+              onClick={() => setIsRegionSelectionMode(!isRegionSelectionMode)}
+              disabled={!results || results.isRunning || results.z.length === 0}
+              className={`h-11 px-4 ${isRegionSelectionMode ? "bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border-indigo-500/30" : "bg-white/90 dark:bg-[#18181b]/90 text-slate-700 dark:text-slate-300 border-transparent dark:border-white/5"} rounded-full flex items-center justify-center gap-2 shadow-[0_4px_20px_rgb(0,0,0,0.04)] dark:shadow-none border hover:text-black dark:hover:text-white transition-all duration-300 disabled:opacity-40 hover:cursor-pointer text-sm font-medium`}
+              title="Select region to compute accurate metrics"
+            >
+              <Target
+                size={16}
+                strokeWidth={2}
+                className={`${isRegionSelectionMode ? "animate-pulse" : ""} drop-shadow-sm`}
+              />
+              Select Region
+            </button>
+
             <div className="bg-white/90 dark:bg-[#18181b]/90 rounded-full flex items-center pl-6 pr-2 py-2 shadow-[0_4px_20px_rgb(0,0,0,0.04)] dark:shadow-none border border-transparent dark:border-white/5 backdrop-blur-md ml-2">
               <div className="flex flex-col mr-4">
                 <span className="text-[9px] uppercase font-bold text-slate-400 dark:text-slate-500 tracking-wider">
                   Sheet Density
                 </span>
-                <span className="text-[13px] font-black text-slate-800 dark:text-gray-100 leading-tight">
+                <span className="text-[13px] font-black text-slate-800 dark:text-gray-100 leading-tight transition-all duration-300">
                   {results && !results.isRunning
-                    ? formatScientific(results.ns)
+                    ? formatScientific(displayNs)
                     : "---"}
                 </span>
               </div>
@@ -277,21 +353,65 @@ function App() {
             >
               <div className="flex-1 bg-white dark:bg-[#121212] shadow-[0_8px_30px_rgb(0,0,0,0.04)] dark:shadow-none border border-transparent dark:border-white/5 rounded-3xl flex flex-col overflow-hidden">
                 <div className="px-6 py-2.5 border-b border-slate-100 dark:border-gray-800/50 text-xs font-bold text-slate-500 dark:text-gray-400 tracking-widest flex items-center justify-between">
-                  <span className="text-xs font-bold text-slate-500 dark:text-gray-400 uppercase tracking-widest">
-                    Energy Band Diagram (EBD)
-                  </span>
+                  <div className="flex items-center gap-4">
+                    <span className="text-xs font-bold text-slate-500 dark:text-gray-400 uppercase tracking-widest">
+                      Energy Band Diagram (EBD)
+                    </span>
+                    {isRegionSelectionMode && ebdLimits && (
+                      <div className="flex items-center gap-2 animate-fadeIn bg-indigo-500/10 rounded-full px-3 py-1 scale-95 border border-indigo-500/30 shadow-inner">
+                        <span className="text-[10px] text-indigo-500 uppercase font-black tracking-widest">
+                          Region:
+                        </span>
+                        <input
+                          type="number"
+                          value={ebdLimits[0].toFixed(2)}
+                          onChange={(e) =>
+                            handleEbdInputChange(0, e.target.value)
+                          }
+                          className="w-14 bg-transparent text-slate-700 dark:text-slate-300 font-mono text-xs outline-none border-b border-indigo-500/30 focus:border-indigo-500 transition-colors text-center"
+                        />
+                        <span className="text-[10px] text-slate-500 italic">
+                          to
+                        </span>
+                        <input
+                          type="number"
+                          value={ebdLimits[1].toFixed(2)}
+                          onChange={(e) =>
+                            handleEbdInputChange(1, e.target.value)
+                          }
+                          className="w-14 bg-transparent text-slate-700 dark:text-slate-300 font-mono text-xs outline-none border-b border-indigo-500/30 focus:border-indigo-500 transition-colors text-center"
+                        />
+                        <span className="text-[10px] text-slate-500">nm</span>
+                        <button
+                          onClick={() =>
+                            setEbdLimits([
+                              0,
+                              results?.z[results.z.length - 1] ?? 0,
+                            ])
+                          }
+                          className="ml-1 text-slate-400 hover:text-indigo-500 transition-colors"
+                          title="Reset Region"
+                        >
+                          <RotateCcw size={12} strokeWidth={2.5} />
+                        </button>
+                      </div>
+                    )}
+                  </div>
+
                   {results && !results.isRunning && (
-                    <div className="flex flex-col items-center rounded-2xl px-3 py-1 bg-black/5 dark:bg-white/5">
+                    <div className="flex flex-col items-center rounded-2xl px-3 py-1 bg-black/5 dark:bg-white/5 transition-all duration-300">
                       <div>
                         <span className="text-[10px] uppercase font-bold text-slate-500">
-                          Average Electric Field
+                          {isRegionSelectionMode
+                            ? "Region Electric Field"
+                            : "Average Electric Field"}
                         </span>
                       </div>
-                      <span className="text-sm font-mono font-bold text-blue-500">
-                        {results.slope !== undefined
-                          ? formatScientific(Math.abs(results.slope))
+                      <span className="text-sm font-mono font-bold text-blue-500 transition-all">
+                        {displaySlope !== undefined
+                          ? formatScientific(Math.abs(displaySlope))
                           : "---"}{" "}
-                        MV/cm
+                        V/cm
                       </span>
                     </div>
                   )}
@@ -301,20 +421,63 @@ function App() {
                 </div>
               </div>
 
-              <div className="h-72 bg-white dark:bg-[#121212] shadow-[0_8px_30px_rgb(0,0,0,0.04)] dark:shadow-none border border-transparent dark:border-white/5 rounded-3xl flex flex-col overflow-hidden shrink-0">
+              <div className="flex-1 bg-white dark:bg-[#121212] shadow-[0_8px_30px_rgb(0,0,0,0.04)] dark:shadow-none border border-transparent dark:border-white/5 rounded-3xl flex flex-col overflow-hidden">
                 <div className="px-6 py-2.5 border-b border-slate-100 dark:border-gray-800/50 text-xs font-bold text-slate-500 dark:text-gray-400 tracking-widest flex items-center justify-between">
-                  <div className="uppercase">Electron Density n(z)</div>
+                  <div className="flex items-center gap-4">
+                    <div className="uppercase">Electron Density n(z)</div>
+                    {isRegionSelectionMode && densityLimits && (
+                      <div className="flex items-center gap-2 animate-fadeIn bg-indigo-500/10 rounded-full px-3 py-1 scale-95 border border-indigo-500/30 shadow-inner">
+                        <span className="text-[10px] text-indigo-500 uppercase font-black tracking-widest">
+                          Region:
+                        </span>
+                        <input
+                          type="number"
+                          value={densityLimits[0].toFixed(2)}
+                          onChange={(e) =>
+                            handleDensityInputChange(0, e.target.value)
+                          }
+                          className="w-14 bg-transparent text-slate-700 dark:text-slate-300 font-mono text-xs outline-none border-b border-indigo-500/30 focus:border-indigo-500 transition-colors text-center"
+                        />
+                        <span className="text-[10px] text-slate-500 italic">
+                          to
+                        </span>
+                        <input
+                          type="number"
+                          value={densityLimits[1].toFixed(2)}
+                          onChange={(e) =>
+                            handleDensityInputChange(1, e.target.value)
+                          }
+                          className="w-14 bg-transparent text-slate-700 dark:text-slate-300 font-mono text-xs outline-none border-b border-indigo-500/30 focus:border-indigo-500 transition-colors text-center"
+                        />
+                        <span className="text-[10px] text-slate-500">nm</span>
+                        <button
+                          onClick={() =>
+                            setDensityLimits([
+                              0,
+                              results?.z[results.z.length - 1] ?? 0,
+                            ])
+                          }
+                          className="ml-1 text-slate-400 hover:text-indigo-500 transition-colors"
+                          title="Reset Region"
+                        >
+                          <RotateCcw size={12} strokeWidth={2.5} />
+                        </button>
+                      </div>
+                    )}
+                  </div>
                   <div className="flex items-center gap-6">
                     {results && !results.isRunning && (
-                      <div className="flex flex-col items-center rounded-2xl px-3 py-1 bg-black/5 dark:bg-white/5">
+                      <div className="flex flex-col items-center rounded-2xl px-3 py-1 bg-black/5 dark:bg-white/5 transition-all duration-300">
                         <div className="mb-px">
                           <span className="text-[10px] uppercase font-bold text-slate-500">
-                            Sheet Density (n<sub>s</sub>)
+                            {isRegionSelectionMode
+                              ? "Region Density (ns)"
+                              : "Sheet Density (ns)"}
                           </span>
                         </div>
                         {/* Change this line */}
-                        <span className="text-sm font-mono font-bold text-blue-500">
-                          {formatScientific(results?.ns)} cm<sup>2</sup>
+                        <span className="text-sm font-mono font-bold text-blue-500 transition-all">
+                          {formatScientific(displayNs)} cm<sup>-2</sup>
                         </span>
                       </div>
                     )}

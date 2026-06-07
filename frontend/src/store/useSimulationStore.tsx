@@ -26,6 +26,11 @@ interface SimulationState {
   selectedLayerId: string;
   results: SimulationResult | null;
 
+  // Region Selection Mode
+  isRegionSelectionMode: boolean;
+  ebdLimits: [number, number] | null;
+  densityLimits: [number, number] | null;
+
   // Solver Controls
   gridSpacing: number;
   numSubbands: number;
@@ -41,6 +46,9 @@ interface SimulationState {
   removeLayer: (id: string) => void;
   runSimulation: () => Promise<void>;
   setPinningPotential: (val: number) => void;
+  setIsRegionSelectionMode: (val: boolean) => void;
+  setEbdLimits: (limits: [number, number] | null) => void;
+  setDensityLimits: (limits: [number, number] | null) => void;
 }
 
 const initialLayers: Layer[] = [
@@ -88,6 +96,10 @@ export const useSimulationStore = create<SimulationState>((set, get) => ({
   selectedLayerId: "2",
   results: null,
 
+  isRegionSelectionMode: false,
+  ebdLimits: null,
+  densityLimits: null,
+
   gridSpacing: 2.5,
   numSubbands: 10,
   dampingFactor: 0.1,
@@ -128,18 +140,25 @@ export const useSimulationStore = create<SimulationState>((set, get) => ({
   removeLayer: (id) =>
     set((state) => ({ layers: state.layers.filter((l) => l.id !== id) })),
 
+  setIsRegionSelectionMode: (val) => set({ isRegionSelectionMode: val }),
+
+  setEbdLimits: (limits) => set({ ebdLimits: limits }),
+  setDensityLimits: (limits) => set({ densityLimits: limits }),
+
   runSimulation: async () => {
     set((state) => ({
       results: state.results
         ? { ...state.results, isRunning: true }
         : { z: [], ec: [], ev: [], n: [], ns: 0, slope: 0, isRunning: true },
+      isRegionSelectionMode: false,
+      ebdLimits: null,
+      densityLimits: null,
     }));
 
     try {
       const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8001";
       console.log("📡 Simulation API URL:", API_URL);
 
-      // Step 1: Start the simulation — returns a job_id immediately
       const startResponse = await fetch(`${API_URL}/simulate`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -159,7 +178,6 @@ export const useSimulationStore = create<SimulationState>((set, get) => ({
       const { job_id } = await startResponse.json();
       console.log(`📋 Job started: ${job_id}`);
 
-      // Step 2: Poll for results every 3 seconds
       const POLL_INTERVAL = 3000;
       const MAX_POLLS = 200; // ~10 minutes max wait
 
@@ -183,8 +201,13 @@ export const useSimulationStore = create<SimulationState>((set, get) => ({
           continue;
         }
 
-        // Simulation complete!
         console.log("✅ Simulation complete!");
+
+        let initialRegion: [number, number] | null = null;
+        if (data.z && data.z.length > 0) {
+           initialRegion = [0, data.z[data.z.length - 1]];
+        }
+
         set({
           results: {
             z: data.z,
@@ -195,6 +218,8 @@ export const useSimulationStore = create<SimulationState>((set, get) => ({
             slope: data.slope,
             isRunning: false,
           },
+          ebdLimits: initialRegion ? [...initialRegion] as [number, number] : null,
+          densityLimits: initialRegion ? [...initialRegion] as [number, number] : null
         });
         return;
       }

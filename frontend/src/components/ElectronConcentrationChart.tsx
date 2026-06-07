@@ -6,7 +6,7 @@ const Plot = (PlotlyPlot as any).default || PlotlyPlot;
 import { useSimulationStore } from "../store/useSimulationStore";
 
 export const ElectronConcentrationChart: React.FC = () => {
-  const { results, theme } = useSimulationStore();
+  const { results, theme, isRegionSelectionMode, densityLimits, setDensityLimits } = useSimulationStore();
   const [drawIndex, setDrawIndex] = useState(0);
   const [prevResults, setPrevResults] = useState(results);
 
@@ -22,12 +22,13 @@ export const ElectronConcentrationChart: React.FC = () => {
 
     let animationFrameId: number;
     const totalPoints = results.z.length;
-    const duration = 1200;
+    // Speed up rendering when not first loading
+    const duration = isRegionSelectionMode ? 0 : 1200;
     const startTime = performance.now();
 
     const animate = (time: number) => {
       const elapsed = time - startTime;
-      const progress = Math.min(elapsed / duration, 1);
+      const progress = duration === 0 ? 1 : Math.min(elapsed / duration, 1);
 
       const easeOut = 1 - Math.pow(1 - progress, 4);
       setDrawIndex(Math.max(2, Math.floor(easeOut * totalPoints)));
@@ -39,7 +40,7 @@ export const ElectronConcentrationChart: React.FC = () => {
 
     animationFrameId = requestAnimationFrame(animate);
     return () => cancelAnimationFrame(animationFrameId);
-  }, [results]);
+  }, [results, isRegionSelectionMode]);
 
   const axisRanges = useMemo(() => {
     if (!results || results.z.length === 0) return null;
@@ -64,10 +65,39 @@ export const ElectronConcentrationChart: React.FC = () => {
   const gridColor =
     theme === "dark" ? "rgba(255,255,255,0.05)" : "rgba(0,0,0,0.05)";
 
-  // 🚨 NEW: Pass empty arrays to Plotly while calculating
   const isRunning = results.isRunning;
   const currentZ = isRunning ? [] : results.z.slice(0, drawIndex);
   const currentN = isRunning ? [] : results.n.slice(0, drawIndex);
+
+  const handleSelected = (event: Readonly<Plotly.PlotSelectionEvent>) => {
+    if (event && event.range && event.range.x) {
+       const xRange = event.range.x as [number, number];
+       // clamp inside physical bounds
+       const minPossible = results.z[0];
+       const maxPossible = results.z[results.z.length - 1];
+
+       const x0 = Math.max(minPossible, Math.min(xRange[0], xRange[1]));
+       const x1 = Math.min(maxPossible, Math.max(xRange[0], xRange[1]));
+       setDensityLimits([x0, x1]);
+    }
+  };
+
+  // Build the highlight shape if region mode is active
+  const shapes: Partial<Plotly.Shape>[] = [];
+  if (isRegionSelectionMode && densityLimits) {
+     shapes.push({
+        type: 'rect',
+        xref: 'x',
+        yref: 'paper',
+        x0: densityLimits[0],
+        x1: densityLimits[1],
+        y0: 0,
+        y1: 1,
+        fillcolor: 'rgba(99, 102, 241, 0.15)', // Indigo
+        line: { width: 0 },
+        layer: 'below'
+     });
+  }
 
   return (
     <div className="w-full h-full relative">
@@ -104,6 +134,7 @@ export const ElectronConcentrationChart: React.FC = () => {
             gridcolor: gridColor,
             tickfont: { color: fontColor },
             range: axisRanges.x,
+            fixedrange: isRegionSelectionMode,
           },
           yaxis: {
             title: {
@@ -119,12 +150,16 @@ export const ElectronConcentrationChart: React.FC = () => {
             tickfont: { color: fontColor },
             exponentformat: "e",
             range: axisRanges.y,
+            fixedrange: isRegionSelectionMode,
           },
           plot_bgcolor: "transparent",
           paper_bgcolor: "transparent",
           hovermode: "x unified",
+          dragmode: isRegionSelectionMode ? "select" : "zoom",
+          shapes: shapes,
         }}
         useResizeHandler={true}
+        onSelected={isRegionSelectionMode ? handleSelected : undefined}
         style={{ width: "100%", height: "100%" }}
         config={{ responsive: true, displayModeBar: false }}
       />
