@@ -284,7 +284,7 @@ function App() {
                     <div className="flex flex-col items-center rounded-2xl px-3 py-1 bg-black/5 dark:bg-white/5">
                       <div>
                         <span className="text-[10px] uppercase font-bold text-slate-500">
-                          Average Electric Field:
+                          Average Electric Field
                         </span>
                       </div>
                       <span className="text-sm font-mono font-bold text-blue-500">
