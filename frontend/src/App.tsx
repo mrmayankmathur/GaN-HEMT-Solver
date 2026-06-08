@@ -502,7 +502,7 @@ function App() {
                   <div className="flex flex-col mr-4">
                     <span className="max-w-21 items-center text-[13px] font-black text-slate-800 dark:text-gray-100 leading-tight transition-all duration-300">
                       {results && !results.isRunning ? (
-                        <div className="flex flex-col text-center px-[0.5px]">
+                        <div className="flex flex-col text-center">
                           <span className="text-[9px] uppercase font-bold text-slate-400 dark:text-slate-500 tracking-wider">
                             Sheet Density
                           </span>
