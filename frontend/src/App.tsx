@@ -538,8 +538,8 @@ function App() {
                             transition={{ duration: 0.15 }}
                             className=""
                           >
-                            <span className="w-22 flex justify-center text-[13px] font-black text-slate-800 dark:text-gray-100 leading-tight transition-all duration-300">
-                              ------
+                            <span className="w-22 flex justify-center text-[15px] font-black text-slate-800 dark:text-gray-400 leading-tight transition-all duration-300 opacity-85">
+                              Simulate
                             </span>
                           </motion.div>
                         )}
