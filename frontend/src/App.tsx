@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
+import { motion, AnimatePresence } from "framer-motion";
 import {
   Download,
   Moon,
@@ -9,7 +10,7 @@ import {
   FileSpreadsheet,
   Target,
   RotateCcw,
-  ExternalLink
+  ExternalLink,
 } from "lucide-react";
 import {
   Menu,
@@ -49,16 +50,28 @@ const formatScientific = (value: number | undefined) => {
 
 function App() {
   const {
-    theme, toggleTheme, results, runSimulation,
-    isRegionSelectionMode, setIsRegionSelectionMode,
-    ebdLimits, setEbdLimits,
-    densityLimits, setDensityLimits
+    theme,
+    toggleTheme,
+    results,
+    runSimulation,
+    isRegionSelectionMode,
+    setIsRegionSelectionMode,
+    ebdLimits,
+    setEbdLimits,
+    densityLimits,
+    setDensityLimits,
   } = useSimulationStore();
 
   const [activeTab, setActiveTab] = useState<"ebd" | "density">("ebd");
   const [isCapturing, setIsCapturing] = useState(false);
-  const [ebdMetrics, setEbdMetrics] = useState<{slope: number, ns: number} | null>(null);
-  const [densityMetrics, setDensityMetrics] = useState<{slope: number, ns: number} | null>(null);
+  const [ebdMetrics, setEbdMetrics] = useState<{
+    slope: number;
+    ns: number;
+  } | null>(null);
+  const [densityMetrics, setDensityMetrics] = useState<{
+    slope: number;
+    ns: number;
+  } | null>(null);
 
   const viewMode = useMemo(() => {
     return new URLSearchParams(window.location.search).get("view");
@@ -146,64 +159,78 @@ function App() {
   };
 
   const handleEbdInputChange = (index: 0 | 1, val: string) => {
-     const num = parseFloat(val);
-     if (ebdLimits && !isNaN(num)) {
-        const newLimits = [...ebdLimits] as [number, number];
-        newLimits[index] = num;
-        setEbdLimits(newLimits);
-     }
+    const num = parseFloat(val);
+    if (ebdLimits && !isNaN(num)) {
+      const newLimits = [...ebdLimits] as [number, number];
+      newLimits[index] = num;
+      setEbdLimits(newLimits);
+    }
   };
 
   const handleDensityInputChange = (index: 0 | 1, val: string) => {
     const num = parseFloat(val);
     if (densityLimits && !isNaN(num)) {
-       const newLimits = [...densityLimits] as [number, number];
-       newLimits[index] = num;
-       setDensityLimits(newLimits);
+      const newLimits = [...densityLimits] as [number, number];
+      newLimits[index] = num;
+      setDensityLimits(newLimits);
     }
   };
 
   const popOutChart = (chartId: "ebd" | "density") => {
-     window.open(`${window.location.pathname}?view=${chartId}`, "_blank");
+    window.open(`${window.location.pathname}?view=${chartId}`, "_blank");
   };
 
-  const displayNs = isRegionSelectionMode && densityMetrics ? densityMetrics.ns : results?.ns;
-  const displaySlope = isRegionSelectionMode && ebdMetrics ? ebdMetrics.slope : results?.slope;
+  const displayNs =
+    isRegionSelectionMode && densityMetrics ? densityMetrics.ns : results?.ns;
+  const displaySlope =
+    isRegionSelectionMode && ebdMetrics ? ebdMetrics.slope : results?.slope;
 
   const renderEBDChart = () => (
-    <div className="flex-1 bg-white dark:bg-[#121212] shadow-[0_8px_30px_rgb(0,0,0,0.04)] dark:shadow-none border border-transparent dark:border-white/5 rounded-3xl flex flex-col overflow-hidden h-full">
+    <div className="flex flex-col h-full w-full">
       <div className="px-6 py-2.5 border-b border-slate-100 dark:border-gray-800/50 text-xs font-bold text-slate-500 dark:text-gray-400 tracking-widest flex items-center justify-between">
         <div className="flex items-center gap-4">
-           <span className="text-xs font-bold text-slate-500 dark:text-gray-400 uppercase tracking-widest flex items-center gap-2">
-             Energy Band Diagram (EBD)
-             {!viewMode && (
-               <button onClick={() => popOutChart("ebd")} className="text-slate-400 hover:text-indigo-500 transition-colors" title="Pop out into new tab">
-                 <ExternalLink size={14} strokeWidth={2.5}/>
-               </button>
-             )}
-           </span>
-           {isRegionSelectionMode && ebdLimits && (
-             <div className="flex items-center gap-2 animate-fadeIn bg-indigo-500/10 rounded-full px-3 py-1 scale-95 border border-indigo-500/30 shadow-inner">
-                <span className="text-[10px] text-indigo-500 uppercase font-black tracking-widest">Region:</span>
-                <input
-                  type="number"
-                  value={ebdLimits[0].toFixed(2)}
-                  onChange={(e) => handleEbdInputChange(0, e.target.value)}
-                  className="w-14 bg-transparent text-slate-700 dark:text-slate-300 font-mono text-xs outline-none border-b border-indigo-500/30 focus:border-indigo-500 transition-colors text-center"
-                />
-                <span className="text-[10px] text-slate-500 italic">to</span>
-                <input
-                  type="number"
-                  value={ebdLimits[1].toFixed(2)}
-                  onChange={(e) => handleEbdInputChange(1, e.target.value)}
-                  className="w-14 bg-transparent text-slate-700 dark:text-slate-300 font-mono text-xs outline-none border-b border-indigo-500/30 focus:border-indigo-500 transition-colors text-center"
-                />
-                <span className="text-[10px] text-slate-500">nm</span>
-                <button onClick={() => setEbdLimits([0, results?.z[results.z.length - 1] ?? 0])} className="ml-1 text-slate-400 hover:text-indigo-500 transition-colors" title="Reset Region">
-                  <RotateCcw size={12} strokeWidth={2.5} />
-                </button>
-             </div>
-           )}
+          <span className="text-xs font-bold text-slate-500 dark:text-gray-400 uppercase tracking-widest flex items-center gap-2">
+            Energy Band Diagram (EBD)
+            {!viewMode && (
+              <button
+                onClick={() => popOutChart("ebd")}
+                className="text-slate-400 hover:text-indigo-500 transition-colors"
+                title="Pop out into new tab"
+              >
+                <ExternalLink size={14} strokeWidth={2.5} />
+              </button>
+            )}
+          </span>
+          {isRegionSelectionMode && ebdLimits && (
+            <div className="flex items-center gap-2 animate-fadeIn bg-indigo-500/10 rounded-full px-3 py-1 scale-95 border border-indigo-500/30 shadow-inner">
+              <span className="text-[10px] text-indigo-500 uppercase font-black tracking-widest">
+                Region:
+              </span>
+              <input
+                type="number"
+                value={ebdLimits[0].toFixed(2)}
+                onChange={(e) => handleEbdInputChange(0, e.target.value)}
+                className="w-14 bg-transparent text-slate-700 dark:text-slate-300 font-mono text-xs outline-none border-b border-indigo-500/30 focus:border-indigo-500 transition-colors text-center"
+              />
+              <span className="text-[10px] text-slate-500 italic">to</span>
+              <input
+                type="number"
+                value={ebdLimits[1].toFixed(2)}
+                onChange={(e) => handleEbdInputChange(1, e.target.value)}
+                className="w-14 bg-transparent text-slate-700 dark:text-slate-300 font-mono text-xs outline-none border-b border-indigo-500/30 focus:border-indigo-500 transition-colors text-center"
+              />
+              <span className="text-[10px] text-slate-500">nm</span>
+              <button
+                onClick={() =>
+                  setEbdLimits([0, results?.z[results.z.length - 1] ?? 0])
+                }
+                className="ml-1 text-slate-400 hover:text-indigo-500 transition-colors"
+                title="Reset Region"
+              >
+                <RotateCcw size={12} strokeWidth={2.5} />
+              </button>
+            </div>
+          )}
         </div>
 
         {results && !results.isRunning && (
@@ -229,46 +256,60 @@ function App() {
   );
 
   const renderDensityChart = () => (
-    <div className="flex-1 bg-white dark:bg-[#121212] shadow-[0_8px_30px_rgb(0,0,0,0.04)] dark:shadow-none border border-transparent dark:border-white/5 rounded-3xl flex flex-col overflow-hidden h-full">
+    <div className="flex flex-col h-full w-full">
       <div className="px-6 py-2.5 border-b border-slate-100 dark:border-gray-800/50 text-xs font-bold text-slate-500 dark:text-gray-400 tracking-widest flex items-center justify-between">
         <div className="flex items-center gap-4">
-           <div className="uppercase flex items-center gap-2">
-             Electron Density n(z)
-             {!viewMode && (
-               <button onClick={() => popOutChart("density")} className="text-slate-400 hover:text-indigo-500 transition-colors" title="Pop out into new tab">
-                 <ExternalLink size={14} strokeWidth={2.5}/>
-               </button>
-             )}
-           </div>
-           {isRegionSelectionMode && densityLimits && (
-             <div className="flex items-center gap-2 animate-fadeIn bg-indigo-500/10 rounded-full px-3 py-1 scale-95 border border-indigo-500/30 shadow-inner">
-                <span className="text-[10px] text-indigo-500 uppercase font-black tracking-widest">Region:</span>
-                <input
-                  type="number"
-                  value={densityLimits[0].toFixed(2)}
-                  onChange={(e) => handleDensityInputChange(0, e.target.value)}
-                  className="w-14 bg-transparent text-slate-700 dark:text-slate-300 font-mono text-xs outline-none border-b border-indigo-500/30 focus:border-indigo-500 transition-colors text-center"
-                />
-                <span className="text-[10px] text-slate-500 italic">to</span>
-                <input
-                  type="number"
-                  value={densityLimits[1].toFixed(2)}
-                  onChange={(e) => handleDensityInputChange(1, e.target.value)}
-                  className="w-14 bg-transparent text-slate-700 dark:text-slate-300 font-mono text-xs outline-none border-b border-indigo-500/30 focus:border-indigo-500 transition-colors text-center"
-                />
-                <span className="text-[10px] text-slate-500">nm</span>
-                <button onClick={() => setDensityLimits([0, results?.z[results.z.length - 1] ?? 0])} className="ml-1 text-slate-400 hover:text-indigo-500 transition-colors" title="Reset Region">
-                  <RotateCcw size={12} strokeWidth={2.5} />
-                </button>
-             </div>
-           )}
+          <div className="uppercase flex items-center gap-2">
+            Electron Density n(z)
+            {!viewMode && (
+              <button
+                onClick={() => popOutChart("density")}
+                className="text-slate-400 hover:text-indigo-500 transition-colors"
+                title="Pop out into new tab"
+              >
+                <ExternalLink size={14} strokeWidth={2.5} />
+              </button>
+            )}
+          </div>
+          {isRegionSelectionMode && densityLimits && (
+            <div className="flex items-center gap-2 animate-fadeIn bg-indigo-500/10 rounded-full px-3 py-1 scale-95 border border-indigo-500/30 shadow-inner">
+              <span className="text-[10px] text-indigo-500 uppercase font-black tracking-widest">
+                Region:
+              </span>
+              <input
+                type="number"
+                value={densityLimits[0].toFixed(2)}
+                onChange={(e) => handleDensityInputChange(0, e.target.value)}
+                className="w-14 bg-transparent text-slate-700 dark:text-slate-300 font-mono text-xs outline-none border-b border-indigo-500/30 focus:border-indigo-500 transition-colors text-center"
+              />
+              <span className="text-[10px] text-slate-500 italic">to</span>
+              <input
+                type="number"
+                value={densityLimits[1].toFixed(2)}
+                onChange={(e) => handleDensityInputChange(1, e.target.value)}
+                className="w-14 bg-transparent text-slate-700 dark:text-slate-300 font-mono text-xs outline-none border-b border-indigo-500/30 focus:border-indigo-500 transition-colors text-center"
+              />
+              <span className="text-[10px] text-slate-500">nm</span>
+              <button
+                onClick={() =>
+                  setDensityLimits([0, results?.z[results.z.length - 1] ?? 0])
+                }
+                className="ml-1 text-slate-400 hover:text-indigo-500 transition-colors"
+                title="Reset Region"
+              >
+                <RotateCcw size={12} strokeWidth={2.5} />
+              </button>
+            </div>
+          )}
         </div>
         <div className="flex items-center gap-6">
           {results && !results.isRunning && (
             <div className="flex flex-col items-center rounded-2xl px-3 py-1 bg-black/5 dark:bg-white/5 transition-all duration-300">
               <div className="mb-px">
                 <span className="text-[10px] uppercase font-bold text-slate-500">
-                  {isRegionSelectionMode ? "Region Density:" : "Sheet Density (ns):"}
+                  {isRegionSelectionMode
+                    ? "Region Density:"
+                    : "Sheet Density (ns):"}
                 </span>
               </div>
               <span className="text-sm font-mono font-bold text-blue-500 transition-all">
@@ -284,17 +325,34 @@ function App() {
     </div>
   );
 
+  const slideVariants = {
+    initial: (tab: "ebd" | "density") => ({
+      opacity: 0,
+      x: tab === "ebd" ? -30 : 30,
+    }),
+    animate: {
+      opacity: 1,
+      x: 0,
+    },
+    exit: (tab: "ebd" | "density") => ({
+      opacity: 0,
+      x: tab === "ebd" ? 30 : -30,
+    }),
+  };
+
   return (
     <div
       className={`${theme === "dark" ? "dark" : ""} fixed inset-0 font-sans`}
     >
       <div className="h-full w-full flex flex-col bg-[#f0f2eb] dark:bg-[#0c0c0e] text-slate-800 dark:text-gray-100 transition-colors duration-500 relative z-0">
-
         {/* If in Pop-out Mode, render ONLY the selected Chart full screen */}
         {viewMode ? (
-          <div className="h-full w-full p-4 flex flex-col overflow-hidden" id="charts-export-area">
-             {viewMode === "ebd" && renderEBDChart()}
-             {viewMode === "density" && renderDensityChart()}
+          <div
+            className="h-full w-full p-4 flex flex-col overflow-hidden"
+            id="charts-export-area"
+          >
+            {viewMode === "ebd" && renderEBDChart()}
+            {viewMode === "density" && renderDensityChart()}
           </div>
         ) : (
           /* OTHERWISE: Normal Application Layout */
@@ -314,7 +372,8 @@ function App() {
 
                 <div className="hidden lg:flex items-center justify-center bg-white/90 dark:bg-[#18181b]/90 rounded-full px-8 py-3.5 shadow-[0_4px_20px_rgb(0,0,0,0.03)] dark:shadow-none border border-transparent dark:border-white/5 transition-all w-137.5 backdrop-blur-md">
                   <p className="text-center text-[13px] font-semibold text-slate-600 dark:text-slate-300 tracking-wide">
-                    Self-Consistent Schrödinger-Poisson Solver for AlGaN/GaN HEMT
+                    Self-Consistent Schrödinger-Poisson Solver for AlGaN/GaN
+                    HEMT
                   </p>
                 </div>
               </div>
@@ -401,19 +460,27 @@ function App() {
                   title="Toggle Theme"
                 >
                   {theme === "light" ? (
-                   <Moon size={16} strokeWidth={2} />
+                    <Moon size={16} strokeWidth={2} />
                   ) : (
                     <Sun size={16} strokeWidth={2} />
                   )}
                 </button>
 
                 <button
-                  onClick={() => setIsRegionSelectionMode(!isRegionSelectionMode)}
-                  disabled={!results || results.isRunning || results.z.length === 0}
-                  className={`h-11 px-4 ${isRegionSelectionMode ? 'bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border-indigo-500/30' : 'bg-white/90 dark:bg-[#18181b]/90 text-slate-700 dark:text-slate-300 border-transparent dark:border-white/5'} rounded-full flex items-center justify-center gap-2 shadow-[0_4px_20px_rgb(0,0,0,0.04)] dark:shadow-none border hover:text-black dark:hover:text-white transition-all duration-300 disabled:opacity-40 hover:cursor-pointer text-sm font-medium`}
+                  onClick={() =>
+                    setIsRegionSelectionMode(!isRegionSelectionMode)
+                  }
+                  disabled={
+                    !results || results.isRunning || results.z.length === 0
+                  }
+                  className={`h-11 px-4 ${isRegionSelectionMode ? "bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border-indigo-500/30" : "bg-white/90 dark:bg-[#18181b]/90 text-slate-700 dark:text-slate-300 border-transparent dark:border-white/5"} rounded-full flex items-center justify-center gap-2 shadow-[0_4px_20px_rgb(0,0,0,0.04)] dark:shadow-none border hover:text-black dark:hover:text-white transition-all duration-300 disabled:opacity-40 hover:cursor-pointer text-sm font-medium`}
                   title="Select region to compute accurate metrics"
                 >
-                  <Target size={16} strokeWidth={2} className={`${isRegionSelectionMode ? 'animate-pulse' : ''} drop-shadow-sm`} />
+                  <Target
+                    size={16}
+                    strokeWidth={2}
+                    className={`${isRegionSelectionMode ? "animate-pulse" : ""} drop-shadow-sm`}
+                  />
                   Select Region
                 </button>
 
@@ -462,30 +529,65 @@ function App() {
               </aside>
 
               {/* Main Content Area */}
-              <div className="flex-1 flex flex-col pt-22.5 pb-6 px-8 overflow-hidden">
-
+              <div className="flex-1 flex flex-col pt-22.5 pb-6 px-7 overflow-hidden">
                 {/* Tabs Row */}
-                <div className="flex items-center gap-2 mb-4 bg-white/50 dark:bg-white/5 p-1.5 rounded-2xl w-fit border border-slate-200/50 dark:border-gray-800/50 backdrop-blur-md">
-                   <button
-                     onClick={() => setActiveTab("ebd")}
-                     className={`px-5 py-2 rounded-xl text-sm font-semibold transition-all duration-300 ${activeTab === "ebd" ? "bg-white dark:bg-[#18181b] text-blue-600 dark:text-blue-400 shadow-sm" : "text-slate-500 hover:text-slate-700 dark:hover:text-slate-300"}`}
-                   >
-                     Energy Band Diagram
-                   </button>
-                   <button
-                     onClick={() => setActiveTab("density")}
-                     className={`px-5 py-2 rounded-xl text-sm font-semibold transition-all duration-300 ${activeTab === "density" ? "bg-white dark:bg-[#18181b] text-emerald-600 dark:text-emerald-400 shadow-sm" : "text-slate-500 hover:text-slate-700 dark:hover:text-slate-300"}`}
-                   >
-                     Electron Density n(z)
-                   </button>
+                <div className="flex items-center gap-1 mb-4 bg-white/50 dark:bg-white/5 p-1.5 rounded-2xl w-fit border border-slate-200/50 dark:border-gray-800/50 backdrop-blur-md relative">
+                  {["ebd", "density"].map((tab) => (
+                    <button
+                      key={tab}
+                      onClick={() => setActiveTab(tab as "ebd" | "density")}
+                      className={`relative px-5 py-2 rounded-xl text-sm font-semibold transition-colors duration-300 z-10 ${
+                        activeTab === tab
+                          ? tab === "ebd"
+                            ? "text-blue-600 dark:text-blue-400"
+                            : "text-emerald-600 dark:text-emerald-400"
+                          : "text-slate-500 hover:text-slate-700 dark:hover:text-slate-300"
+                      }`}
+                    >
+                      {tab === "ebd"
+                        ? "Energy Band Diagram"
+                        : "Electron Density n(z)"}
+
+                      {activeTab === tab && (
+                        <motion.div
+                          layoutId="active-tab-highlight"
+                          // Changes made in the className below 👇
+                          className="absolute inset-0 bg-white dark:bg-gray-400/10 dark:border dark:border-white/5 rounded-xl shadow-sm dark:shadow-sm/40 dark:shadow-gray-700 dark:inset-shadow-sm dark:inset-shadow-gray-900/10 z-[-1]"
+                          transition={{
+                            type: "spring",
+                            bounce: 0.2,
+                            duration: 0.5,
+                          }}
+                        />
+                      )}
+                    </button>
+                  ))}
                 </div>
 
                 <section
                   id="charts-export-area"
-                  className="flex-1 flex flex-col gap-6 overflow-hidden animate-fadeIn"
+                  className="flex-1 overflow-hidden relative bg-white dark:bg-[#121212] shadow-[0_8px_30px_rgb(0,0,0,0.04)] dark:shadow-none border border-transparent dark:border-white/5 rounded-3xl"
                 >
-                  {activeTab === "ebd" && renderEBDChart()}
-                  {activeTab === "density" && renderDensityChart()}
+                  <AnimatePresence
+                    mode="wait"
+                    initial={false}
+                    custom={activeTab}
+                  >
+                    <motion.div
+                      key={activeTab}
+                      custom={activeTab}
+                      variants={slideVariants}
+                      initial="initial"
+                      animate="animate"
+                      exit="exit"
+                      transition={{ duration: 0.15, ease: "easeOut" }}
+                      className="w-full h-full"
+                    >
+                      {activeTab === "ebd"
+                        ? renderEBDChart()
+                        : renderDensityChart()}
+                    </motion.div>
+                  </AnimatePresence>
                 </section>
               </div>
             </main>
