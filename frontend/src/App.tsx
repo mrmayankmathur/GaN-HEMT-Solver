@@ -1,5 +1,7 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, Fragment } from "react";
 import { motion, AnimatePresence } from "framer-motion";
+import * as LottieModule from "lottie-react";
+import animationData from "./assets/loading.json";
 import {
   Download,
   Moon,
@@ -20,7 +22,6 @@ import {
   Transition,
 } from "@headlessui/react";
 
-import { Fragment } from "react";
 import { LayerStackEditor } from "./components/LayerStackEditor";
 import { SolverControls } from "./components/SolverControls";
 import { BandDiagramChart } from "./components/BandDiagramChart";
@@ -61,6 +62,17 @@ function App() {
     densityLimits,
     setDensityLimits,
   } = useSimulationStore();
+
+  const Lottie = (
+    LottieModule as unknown as {
+      default: {
+        default: React.ComponentType<{
+          animationData: object;
+          loop?: boolean;
+        }>;
+      };
+    }
+  ).default.default;
 
   const [activeTab, setActiveTab] = useState<"ebd" | "density">("ebd");
   const [isCapturing, setIsCapturing] = useState(false);
@@ -234,10 +246,12 @@ function App() {
         </div>
 
         {results && !results.isRunning && (
-          <div className="flex flex-col items-center rounded-2xl px-3 py-1 bg-black/5 dark:bg-white/5 transition-all duration-300">
+          <div className="min-w-47.5 flex flex-col items-center rounded-2xl px-3 py-1 bg-black/5 dark:bg-white/5 transition-all duration-300">
             <div>
               <span className="text-[10px] uppercase font-bold text-slate-500">
-                {isRegionSelectionMode ? "Region Field:" : "Average Field:"}
+                {isRegionSelectionMode
+                  ? "Region Electric Field:"
+                  : "Average Electric Field:"}
               </span>
             </div>
             <span className="text-sm font-mono font-bold text-blue-500 transition-all">
@@ -486,13 +500,21 @@ function App() {
 
                 <div className="bg-white/90 dark:bg-[#18181b]/90 rounded-full flex items-center pl-6 pr-2 py-2 shadow-[0_4px_20px_rgb(0,0,0,0.04)] dark:shadow-none border border-transparent dark:border-white/5 backdrop-blur-md ml-2">
                   <div className="flex flex-col mr-4">
-                    <span className="text-[9px] uppercase font-bold text-slate-400 dark:text-slate-500 tracking-wider">
-                      Sheet Density
-                    </span>
-                    <span className="text-[13px] font-black text-slate-800 dark:text-gray-100 leading-tight transition-all duration-300">
-                      {results && !results.isRunning
-                        ? formatScientific(displayNs)
-                        : "---"}
+                    <span className="max-w-21 items-center text-[13px] font-black text-slate-800 dark:text-gray-100 leading-tight transition-all duration-300">
+                      {results && !results.isRunning ? (
+                        <div className="flex flex-col text-center px-[0.5px]">
+                          <span className="text-[9px] uppercase font-bold text-slate-400 dark:text-slate-500 tracking-wider">
+                            Sheet Density
+                          </span>
+                          {formatScientific(displayNs)}
+                        </div>
+                      ) : results?.isRunning ? (
+                        <div className="flex items-center justify-center -ml-13 w-45 h-6 overflow-visible">
+                          <Lottie animationData={animationData} loop />
+                        </div>
+                      ) : (
+                        "---"
+                      )}
                     </span>
                   </div>
 
