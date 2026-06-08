@@ -500,21 +500,50 @@ function App() {
 
                 <div className="bg-white/90 dark:bg-[#18181b]/90 rounded-full flex items-center pl-6 pr-2 py-2 shadow-[0_4px_20px_rgb(0,0,0,0.04)] dark:shadow-none border border-transparent dark:border-white/5 backdrop-blur-md ml-2">
                   <div className="flex flex-col mr-4">
-                    <span className="max-w-21 items-center text-[13px] font-black text-slate-800 dark:text-gray-100 leading-tight transition-all duration-300">
-                      {results && !results.isRunning ? (
-                        <div className="flex flex-col text-center">
-                          <span className="text-[9px] uppercase font-bold text-slate-400 dark:text-slate-500 tracking-wider">
-                            Sheet Density
-                          </span>
-                          {formatScientific(displayNs)}
-                        </div>
-                      ) : results?.isRunning ? (
-                        <div className="flex items-center justify-center -ml-13 w-45 h-6 overflow-visible">
-                          <Lottie animationData={animationData} loop />
-                        </div>
-                      ) : (
-                        "---"
-                      )}
+                    <span className="w-22 items-center text-[13px] font-black text-slate-800 dark:text-gray-100 leading-tight transition-all duration-300">
+                      <AnimatePresence mode="wait">
+                        {results && !results.isRunning ? (
+                          <motion.div
+                            key="result"
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            exit={{ opacity: 0 }}
+                            transition={{ duration: 0.15 }}
+                            className="flex flex-col text-center"
+                          >
+                            <span className="text-[9px] uppercase font-bold text-slate-400 dark:text-slate-500 tracking-wider">
+                              Sheet Density
+                            </span>
+                            <span className="text-[13px] font-black text-slate-800 dark:text-gray-100 leading-tight">
+                              {formatScientific(displayNs)}
+                            </span>
+                          </motion.div>
+                        ) : results?.isRunning ? (
+                          <motion.div
+                            key="loading"
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            exit={{ opacity: 0 }}
+                            transition={{ duration: 0.15 }}
+                            className="flex items-center justify-center -ml-11.5 w-45 h-6 overflow-visible"
+                          >
+                            <Lottie animationData={animationData} loop />
+                          </motion.div>
+                        ) : (
+                          <motion.div
+                            key="empty"
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            exit={{ opacity: 0 }}
+                            transition={{ duration: 0.15 }}
+                            className=""
+                          >
+                            <span className="w-22 flex justify-center text-[13px] font-black text-slate-800 dark:text-gray-100 leading-tight transition-all duration-300">
+                              ------
+                            </span>
+                          </motion.div>
+                        )}
+                      </AnimatePresence>
                     </span>
                   </div>
 
