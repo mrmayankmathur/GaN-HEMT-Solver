@@ -19,9 +19,12 @@ export const SolverControls: React.FC = () => {
           </label>
           <input
             type="number"
+            step="0.5"
             value={store.gridSpacing}
-            className="p-2 border border-slate-300/60 dark:border-gray-700 rounded-lg bg-white dark:bg-[#1a1a1a] text-slate-700 dark:text-gray-200 outline-none focus:ring-2 focus:ring-blue-500/30 transition-all shadow-sm font-mono"
-            readOnly
+            onChange={(e) =>
+              store.setGridSpacing(parseFloat(e.target.value))
+            }
+            className="p-2 border border-slate-300/60 dark:border-gray-700 rounded-lg bg-white dark:bg-[#1a1a1a] text-slate-700 dark:text-gray-200 outline-none focus:ring-2 focus:ring-blue-500/30 transition-all shadow-sm font-mono cursor-text"
           />
         </div>
         <div className="flex flex-col gap-1.5 focus-within:-translate-y-0.5 transition-transform duration-300">

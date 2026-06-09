@@ -1,4 +1,4 @@
-function [z_out, Ec_out, Ev_out, n_out, ns_out, slope_out] = Run_GaN_sim(input_layers, phi_b)
+function [z_out, Ec_out, Ev_out, n_out, ns_out, slope_out] = Run_GaN_sim(input_layers, phi_b, grid_spacing)
     % Run_GaN_sim: Self-consistent solver for HEMT stacks
 
     global aquila_control
@@ -7,11 +7,14 @@ function [z_out, Ec_out, Ev_out, n_out, ns_out, slope_out] = Run_GaN_sim(input_l
     if nargin < 2
         phi_b = 1.7; % Default pinning potential if not provided
     end
+    if nargin < 3
+        grid_spacing = 2.5; % Default grid spacing in Angstroms
+    end
 
-    
+
     %% 1. DEFINE GENERIC LAYER SCHEMA & GLOBALS
     a_substrate = 3.189; % Angstroms (GaN)
-    dz = 2.5;            % GRID SPACING in Angstroms
+    dz = grid_spacing;   % GRID SPACING in Angstroms
     
     % FIX: Ensure variable names match the function input
     layers = [input_layers{:}];

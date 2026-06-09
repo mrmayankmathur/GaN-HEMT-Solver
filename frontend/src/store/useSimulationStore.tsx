@@ -47,6 +47,7 @@ interface SimulationState {
   removeLayer: (id: string) => void;
   runSimulation: () => Promise<void>;
   setPinningPotential: (val: number) => void;
+  setGridSpacing: (val: number) => void;
   setIsRegionSelectionMode: (val: boolean) => void;
   setEbdLimits: (limits: [number, number] | null) => void;
   setDensityLimits: (limits: [number, number] | null) => void;
@@ -113,6 +114,7 @@ export const useSimulationStore = create<SimulationState>()(
         set((state) => ({ theme: state.theme === "light" ? "dark" : "light" })),
 
       setPinningPotential: (val: number) => set({ pinningPotential: val }),
+      setGridSpacing: (val: number) => set({ gridSpacing: val }),
 
       setSelectedLayer: (id) => set({ selectedLayerId: id }),
 
@@ -168,6 +170,7 @@ export const useSimulationStore = create<SimulationState>()(
             body: JSON.stringify({
               layers: get().layers,
               pinningPotential: get().pinningPotential,
+              gridSpacing: get().gridSpacing,
             }),
           });
 
