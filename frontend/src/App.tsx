@@ -153,9 +153,9 @@ function App() {
     }
 
     // Export CSV
-    let csvContent = "z(nm),Ec(eV),Ev(eV),n(cm^-3)\n";
+    let csvContent = "z(nm),Ec(eV),Ev(eV),Ef(eV),n(cm^-3)\n";
     for (let i = 0; i < results.z.length; i++) {
-      csvContent += `${results.z[i]},${results.ec[i]},${results.ev[i]},${results.n[i]}\n`;
+      csvContent += `${results.z[i]},${results.ec[i]},${results.ev[i]},0,${results.n[i]}\n`;
     }
 
     const csvBlob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
