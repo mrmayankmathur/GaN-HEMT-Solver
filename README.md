@@ -1,13 +1,4 @@
----
-title: GaN HEMT Simulation App
-emoji: ⚡
-colorFrom: blue
-colorTo: indigo
-sdk: docker
-pinned: false
----
-
-# ⚡ GaN HEMT Solver 
+# GaN HEMT Solver 
 
 A comprehensive and visually rich web application built to simulate, visualize, and analyze the electrostatic and quantum-mechanical behaviors of **AlGaN/GaN High Electron Mobility Transistors (HEMTs)**.
 
@@ -15,7 +6,7 @@ This solver computes the **Self-Consistent Schrödinger-Poisson equation** acros
 
 ---
 
-## ✨ Features
+## Features
 
 - **Interactive Layer Stack Editor**: Define any stack of epitaxial layers including materials (GaN, AlGaN, AlN), thicknesses, aluminum fractions, and doping concentrations.
 - **Solver Controls**: Take control over physical grid spacing, subbands count, convergence iterations, and pinning potentials.
@@ -26,7 +17,7 @@ This solver computes the **Self-Consistent Schrödinger-Poisson equation** acros
 
 ---
 
-## 🏗️ Architecture & Tech Stack
+## Architecture & Tech Stack
 
 This solver is built on a heavily decoupled Full-Stack architecture allowing complex computational numerical methods to bind frictionlessly to the modern web.
 
@@ -47,7 +38,7 @@ Responsible for passing layout topologies from the browser into numerical simula
 
 ---
 
-## 🚀 Running Locally
+## Running Locally
 
 You'll need `Node.js`, `Python 3.10+`, and `GNU Octave` installed on your host machine to run this project natively.
 
