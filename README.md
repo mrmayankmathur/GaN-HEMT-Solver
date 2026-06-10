@@ -1,9 +1,3 @@
-# GaN HEMT Solver 
-
-A comprehensive and visually rich web application built to simulate, visualize, and analyze the electrostatic and quantum-mechanical behaviors of **AlGaN/GaN High Electron Mobility Transistors (HEMTs)**.
-
-This solver computes the **Self-Consistent Schrödinger-Poisson equation** across any defined epitaxial layer stack to output precise Energy Band Diagrams (EBD), 2D Electron Gas (2DEG) densities, and layer internal electric fields.
-
 ---
 
 title: GaN HEMT Simulation App
@@ -12,6 +6,14 @@ colorFrom: blue
 colorTo: indigo
 sdk: docker
 pinned: false
+---
+
+# GaN HEMT Solver 
+
+A comprehensive and visually rich web application built to simulate, visualize, and analyze the electrostatic and quantum-mechanical behaviors of **AlGaN/GaN High Electron Mobility Transistors (HEMTs)**.
+
+This solver computes the **Self-Consistent Schrödinger-Poisson equation** across any defined epitaxial layer stack to output precise Energy Band Diagrams (EBD), 2D Electron Gas (2DEG) densities, and layer internal electric fields.
+
 ---
 
 ## Features
