@@ -66,8 +66,9 @@ class SimulationRequest(BaseModel):
     layers: List[LayerInput]
     pinningPotential: float = 1.7
     gridSpacing: float = 2.5
+    maxIterations: int = 100
 
-def _run_simulation(job_id: str, formatted: list, phi_b: float, grid_spacing: float):
+def _run_simulation(job_id: str, formatted: list, phi_b: float, grid_spacing: float, max_iter: int):
     """
     Run the Octave simulation synchronously.
     FastAPI's BackgroundTasks runs sync functions in a thread pool via anyio,
@@ -80,7 +81,7 @@ def _run_simulation(job_id: str, formatted: list, phi_b: float, grid_spacing: fl
         print(f"🔬 [{job_id}] Simulation started...")
 
         # Use the global octave instance — safe because we run one sim at a time
-        z, ec, ev, n, ns, slope = octave.Run_GaN_sim(formatted, phi_b, grid_spacing, nout=6)
+        z, ec, ev, n, ns, slope = octave.Run_GaN_sim(formatted, phi_b, grid_spacing, max_iter, nout=6)
 
         result = {
             "z": to_list(z),
@@ -116,7 +117,7 @@ def simulate(req: SimulationRequest, background_tasks: BackgroundTasks):
     jobs[job_id] = {"status": "pending", "result": None, "error": None}
 
     # FastAPI BackgroundTasks runs sync functions in a thread pool automatically
-    background_tasks.add_task(_run_simulation, job_id, formatted, req.pinningPotential, req.gridSpacing)
+    background_tasks.add_task(_run_simulation, job_id, formatted, req.pinningPotential, req.gridSpacing, req.maxIterations)
 
     print(f"📋 Job {job_id} queued, active jobs: {list(jobs.keys())}")
     return {"job_id": job_id}

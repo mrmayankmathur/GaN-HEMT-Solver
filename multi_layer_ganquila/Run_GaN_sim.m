@@ -1,4 +1,4 @@
-function [z_out, Ec_out, Ev_out, n_out, ns_out, slope_out] = Run_GaN_sim(input_layers, phi_b, grid_spacing)
+function [z_out, Ec_out, Ev_out, n_out, ns_out, slope_out] = Run_GaN_sim(input_layers, phi_b, grid_spacing, max_iter)
     % Run_GaN_sim: Self-consistent solver for HEMT stacks
 
     global aquila_control
@@ -9,6 +9,9 @@ function [z_out, Ec_out, Ev_out, n_out, ns_out, slope_out] = Run_GaN_sim(input_l
     end
     if nargin < 3
         grid_spacing = 2.5; % Default grid spacing in Angstroms
+    end
+    if nargin < 4
+        max_iter = 100; % Default max iterations if not provided
     end
 
 
@@ -82,7 +85,7 @@ function [z_out, Ec_out, Ev_out, n_out, ns_out, slope_out] = Run_GaN_sim(input_l
     Nd_unit = Nd * 1e-24; 
     num_subbands = 10; 
     
-    for iter = 1:100
+    for iter = 1:max_iter
         % --- A. POISSON ---
         A = sparse(N, N);
         b = zeros(N, 1);

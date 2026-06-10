@@ -48,6 +48,7 @@ interface SimulationState {
   runSimulation: () => Promise<void>;
   setPinningPotential: (val: number) => void;
   setGridSpacing: (val: number) => void;
+  setMaxIterations: (val: number) => void;
   setIsRegionSelectionMode: (val: boolean) => void;
   setEbdLimits: (limits: [number, number] | null) => void;
   setDensityLimits: (limits: [number, number] | null) => void;
@@ -115,6 +116,7 @@ export const useSimulationStore = create<SimulationState>()(
 
       setPinningPotential: (val: number) => set({ pinningPotential: val }),
       setGridSpacing: (val: number) => set({ gridSpacing: val }),
+      setMaxIterations: (val: number) => set({ maxIterations: val }),
 
       setSelectedLayer: (id) => set({ selectedLayerId: id }),
 
@@ -171,6 +173,7 @@ export const useSimulationStore = create<SimulationState>()(
               layers: get().layers,
               pinningPotential: get().pinningPotential,
               gridSpacing: get().gridSpacing,
+              maxIterations: get().maxIterations,
             }),
           });
 

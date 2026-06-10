@@ -21,9 +21,7 @@ export const SolverControls: React.FC = () => {
             type="number"
             step="0.5"
             value={store.gridSpacing}
-            onChange={(e) =>
-              store.setGridSpacing(parseFloat(e.target.value))
-            }
+            onChange={(e) => store.setGridSpacing(parseFloat(e.target.value))}
             className="p-2 border border-slate-300/60 dark:border-gray-700 rounded-lg bg-white dark:bg-[#1a1a1a] text-slate-700 dark:text-gray-200 outline-none focus:ring-2 focus:ring-blue-500/30 transition-all shadow-sm font-mono cursor-text"
           />
         </div>
@@ -44,14 +42,15 @@ export const SolverControls: React.FC = () => {
           </label>
           <input
             type="number"
+            step="10"
             value={store.maxIterations}
-            className="p-2 border border-slate-300/60 dark:border-gray-700 rounded-lg bg-white dark:bg-[#1a1a1a] text-slate-700 dark:text-gray-200 outline-none focus:ring-2 focus:ring-blue-500/30 transition-all shadow-sm font-mono"
-            readOnly
+            onChange={(e) => store.setMaxIterations(parseInt(e.target.value))}
+            className="p-2 border border-slate-300/60 dark:border-gray-700 rounded-lg bg-white dark:bg-[#1a1a1a] text-slate-700 dark:text-gray-200 outline-none focus:ring-2 focus:ring-blue-500/30 transition-all shadow-sm font-mono cursor-text"
           />
         </div>
         <div className="flex flex-col gap-1.5 focus-within:-translate-y-0.5 transition-transform duration-300">
           <label className="font-semibold text-[10px] tracking-wider text-slate-500 dark:text-gray-400 pl-1">
-            Pinning Potential (eV)
+            Surface Potential (eV)
           </label>
           <input
             type="number"
@@ -81,7 +80,7 @@ export const SolverControls: React.FC = () => {
               fill="currentColor"
               className="group-hover:scale-110 transition-transform"
             />{" "}
-            Initialize 1D Poisson
+            Initialize 1D Solver
           </div>
         )}
       </button>
