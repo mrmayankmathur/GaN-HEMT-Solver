@@ -74,7 +74,7 @@ export const SolverControls: React.FC = () => {
             Solving...
           </span>
         ) : (
-          <div className="w-full bg-slate-800 hover:bg-slate-700 text-white py-2 rounded-lg transition-colors flex items-center justify-center gap-2">
+          <div className="w-full bg-slate-800 hover:bg-slate-700 text-white py-2 rounded-lg transition-colors flex items-center justify-center gap-2 hover:cursor-pointer">
             <Play
               size={14}
               fill="currentColor"
