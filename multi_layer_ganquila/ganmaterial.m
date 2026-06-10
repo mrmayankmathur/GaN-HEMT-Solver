@@ -1,26 +1,25 @@
 function [Eg, eps, meff, P_sp, P_pz_coeffs] = ganmaterial(x)
-% GANMATERIAL - Returns Al(x)Ga(1-x)N parameters based on Thesis Chapter 4
+% GANMATERIAL - Returns Al(x)Ga(1-x)N parameters
 % INPUT: x = Aluminum mole fraction (0.0 to 1.0)
 
-    % 1. Bandgap (Eg) - Thesis Eq 4.1 & Table 4.1
+    % 1. Bandgap (Eg)
     Eg_GaN = 3.42;
     Eg_AlN = 6.1;
     b = -1.0; % Bowing parameter
     Eg = x * Eg_AlN + (1-x) * Eg_GaN - b * x * (1-x);
 
-    % 2. Dielectric Constant (epsilon) - Thesis Eq 4.6
-    % Interpolate between 8.9 (GaN) and 8.5 (AlN) (Thesis Table 2.1 values approx)
+    % 2. Dielectric Constant (epsilon)
+    % Interpolate between 8.9 (GaN) and 8.5 (AlN)
     eps = 8.9 * (1-x) + 8.5 * x; 
 
-    % 3. Effective Mass (m*) - Thesis Table 4.2
+    % 3. Effective Mass (m*)
     % Linear interpolation between 0.20 (GaN) and 0.32 (AlN)
     meff = 0.20 * (1-x) + 0.32 * x;
 
-    % 4. Spontaneous Polarization (P_sp) - Thesis Eq 4.26
-    % The thesis uses a non-linear formula:
+    % 4. Spontaneous Polarization (P_sp) 
     P_sp = -0.09*x - 0.034*(1-x) + 0.0191*x*(1-x);
 
-    % 5. Piezoelectric Coefficients - Thesis Eq 4.18
+    % 5. Piezoelectric Coefficients
     % We calculate the term 2 * (e31 - e33 * C13/C33) for later use
     % GaN Parameters
     val_GaN = 2 * (-0.338 - 0.667 * (103/405));
