@@ -5,7 +5,7 @@ function [z_out, Ec_out, Ev_out, n_out, ns_out, slope_out] = Run_GaN_sim(input_l
     aquila_control.verbose = 0;
 
     if nargin < 2
-        phi_b = 1.7; % Default pinning potential if not provided
+        phi_b = 1.7; % Default surface potential if not provided
     end
     if nargin < 3
         grid_spacing = 2.5; % Default grid spacing in Angstroms
