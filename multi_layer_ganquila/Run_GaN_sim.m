@@ -1,4 +1,4 @@
-function [z_out, Ec_out, Ev_out, n_out, ns_out, slope_out] = Run_GaN_sim(input_layers, phi_b, grid_spacing, max_iter)
+function [z_out, Ec_out, Ev_out, n_out, ns_out, slope_out, iterations_used] = Run_GaN_sim(input_layers, phi_b, grid_spacing, max_iter)
     % Run_GaN_sim: Self-consistent solver for HEMT stacks
 
     global aquila_control
@@ -78,14 +78,19 @@ function [z_out, Ec_out, Ev_out, n_out, ns_out, slope_out] = Run_GaN_sim(input_l
     end
     
     %% 4. SELF-CONSISTENT LOOP
-    phi = zeros(N, 1);           
-    n_conc = zeros(N, 1);        
-    damping = 0.1;              
+    phi = zeros(N, 1);
+    n_conc = zeros(N, 1);
+    damping = 0.1;
     kT = 0.0259;
-    Nd_unit = Nd * 1e-24; 
-    num_subbands = 10; 
-    
+    Nd_unit = Nd * 1e-24;
+    num_subbands = 10;
+
+    tolerance = 1e-6;
+    iterations_used = max_iter;
+
     for iter = 1:max_iter
+        phi_old = phi;
+
         % --- A. POISSON ---
         A = sparse(N, N);
         b = zeros(N, 1);
@@ -133,6 +138,13 @@ function [z_out, Ec_out, Ev_out, n_out, ns_out, slope_out] = Run_GaN_sim(input_l
             n_new = n_new + Ns * psi_norm;
         end
         n_conc = (1-damping)*n_conc + damping*n_new;
+
+        % --- D. CONVERGENCE CHECK ---
+        max_error = max(abs(phi - phi_old));
+        if max_error < tolerance
+            iterations_used = iter;
+            break;
+        end
     end
 
     %% 5. FORMAT OUTPUTS

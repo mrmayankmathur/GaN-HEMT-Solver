@@ -81,7 +81,7 @@ def _run_simulation(job_id: str, formatted: list, phi_b: float, grid_spacing: fl
         print(f"🔬 [{job_id}] Simulation started...")
 
         # Use the global octave instance — safe because we run one sim at a time
-        z, ec, ev, n, ns, slope = octave.Run_GaN_sim(formatted, phi_b, grid_spacing, max_iter, nout=6)
+        z, ec, ev, n, ns, slope, iterations_used = octave.Run_GaN_sim(formatted, phi_b, grid_spacing, max_iter, nout=7)
 
         result = {
             "z": to_list(z),
@@ -90,6 +90,7 @@ def _run_simulation(job_id: str, formatted: list, phi_b: float, grid_spacing: fl
             "n": to_list(n),
             "ns": float(ns),
             "slope": float(slope) if slope is not None else 0.0,
+            "iterations_used": int(iterations_used) if iterations_used is not None else max_iter,
         }
         jobs[job_id] = {"status": "complete", "result": result, "error": None}
         print(f"✅ [{job_id}] Simulation complete!")

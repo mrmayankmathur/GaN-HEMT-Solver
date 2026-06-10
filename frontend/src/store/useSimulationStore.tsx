@@ -8,6 +8,7 @@ export interface SimulationResult {
   n: number[];
   ns: number;
   slope: number;
+  iterations_used: number;
   isRunning: boolean;
 }
 
@@ -156,7 +157,7 @@ export const useSimulationStore = create<SimulationState>()(
         set((state) => ({
           results: state.results
             ? { ...state.results, isRunning: true }
-            : { z: [], ec: [], ev: [], n: [], ns: 0, slope: 0, isRunning: true },
+            : { z: [], ec: [], ev: [], n: [], ns: 0, slope: 0, iterations_used: 0, isRunning: true },
           isRegionSelectionMode: false,
           ebdLimits: null,
           densityLimits: null,
@@ -225,6 +226,7 @@ export const useSimulationStore = create<SimulationState>()(
                 n: data.n,
                 ns: data.ns,
                 slope: data.slope,
+                iterations_used: data.iterations_used,
                 isRunning: false,
               },
               ebdLimits: initialRegion ? [...initialRegion] as [number, number] : null,

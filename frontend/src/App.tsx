@@ -499,8 +499,8 @@ function App() {
                 </button>
 
                 <div className="bg-white/90 dark:bg-[#18181b]/90 rounded-full flex items-center pl-6 pr-2 py-2 shadow-[0_4px_20px_rgb(0,0,0,0.04)] dark:shadow-none border border-transparent dark:border-white/5 backdrop-blur-md ml-2">
-                  <div className="flex flex-col mr-4">
-                    <span className="w-22 items-center text-[13px] font-black text-slate-800 dark:text-gray-100 leading-tight transition-all duration-300">
+                  <div className="flex flex-col mr-4 w-22 relative">
+                    <span className="items-center text-[13px] font-black text-slate-800 dark:text-gray-100 leading-tight transition-all duration-300">
                       <AnimatePresence mode="wait">
                         {results && !results.isRunning ? (
                           <motion.div
@@ -509,13 +509,13 @@ function App() {
                             animate={{ opacity: 1 }}
                             exit={{ opacity: 0 }}
                             transition={{ duration: 0.15 }}
-                            className="flex flex-col text-center"
+                            className="absolute inset-0 flex flex-col items-center justify-center text-center"
                           >
                             <span className="text-[9px] uppercase font-bold text-slate-400 dark:text-slate-500 tracking-wider">
-                              Sheet Density
+                              Iterations
                             </span>
-                            <span className="text-[13px] font-black text-slate-800 dark:text-gray-100 leading-tight">
-                              {formatScientific(displayNs)}
+                            <span className="text-[14px] font-black text-emerald-600 dark:text-emerald-500 leading-tight">
+                              {results.iterations_used || "---"}
                             </span>
                           </motion.div>
                         ) : results?.isRunning ? (
@@ -525,7 +525,7 @@ function App() {
                             animate={{ opacity: 1 }}
                             exit={{ opacity: 0 }}
                             transition={{ duration: 0.15 }}
-                            className="flex items-center justify-center -ml-11.5 w-45 h-6 overflow-visible"
+                            className="flex items-center justify-center -ml-11.25 w-45 h-6 overflow-visible"
                           >
                             <Lottie animationData={animationData} loop />
                           </motion.div>
@@ -536,9 +536,9 @@ function App() {
                             animate={{ opacity: 1 }}
                             exit={{ opacity: 0 }}
                             transition={{ duration: 0.15 }}
-                            className=""
+                            className="absolute inset-0 flex items-center justify-center h-full w-full"
                           >
-                            <span className="w-22 flex justify-center text-[15px] font-black text-slate-800 dark:text-gray-400 leading-tight transition-all duration-300 opacity-85">
+                            <span className="text-[15px] font-black text-slate-800 dark:text-gray-400 leading-tight transition-all duration-300 opacity-85">
                               Simulate
                             </span>
                           </motion.div>
