@@ -6,6 +6,14 @@ This solver computes the **Self-Consistent Schrödinger-Poisson equation** acros
 
 ---
 
+title: GaN HEMT Simulation App
+emoji: ⚡
+colorFrom: blue
+colorTo: indigo
+sdk: docker
+pinned: false
+---
+
 ## Features
 
 - **Interactive Layer Stack Editor**: Define any stack of epitaxial layers including materials (GaN, AlGaN, AlN), thicknesses, aluminum fractions, and doping concentrations.
