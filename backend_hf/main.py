@@ -1,6 +1,6 @@
 from fastapi import FastAPI, HTTPException, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from typing import List, Dict, Any
 from pathlib import Path
 import os
@@ -76,6 +76,8 @@ class SimulationRequest(BaseModel):
     pinningPotential: float = 1.7
     gridSpacing: float = 2.5
     maxIterations: int = 100
+    absTolerance: float = Field(default=1e-6, gt=0, le=1.0)
+    relTolerance: float = Field(default=1e-4, gt=0, le=1.0)
 
 
 class ConvergenceRequest(BaseModel):
@@ -84,12 +86,14 @@ class ConvergenceRequest(BaseModel):
     maxIterations: int = 100
     gridSpacings: List[float]        # Angstroms, e.g. [5, 4, 3, 2.5, 2, 1.5, 1]
     tolerance: float = 1.0           # percent, used by the frontend for flagging
+    absTolerance: float = Field(default=1e-6, gt=0, le=1.0)
+    relTolerance: float = Field(default=1e-4, gt=0, le=1.0)
 
 
 # Subbands solved per run — kept in sync with Run_GaN_sim.m (num_subbands = 10)
 NUM_SUBBANDS = 10
 
-def _run_simulation(job_id: str, formatted: list, phi_b: float, grid_spacing: float, max_iter: int):
+def _run_simulation(job_id: str, formatted: list, phi_b: float, grid_spacing: float, max_iter: int, abs_tol: float, rel_tol: float):
     """
     Run the Octave simulation synchronously.
     FastAPI's BackgroundTasks runs sync functions in a thread pool via anyio,
@@ -101,7 +105,7 @@ def _run_simulation(job_id: str, formatted: list, phi_b: float, grid_spacing: fl
 
         # Guard the shared Octave instance
         with octave_lock:
-            z, ec, ev, n, ns, slope, iterations_used = octave.Run_GaN_sim(formatted, phi_b, grid_spacing, max_iter, nout=7)
+            z, ec, ev, n, ns, slope, iterations_used, final_abs_err, final_rel_err, converged = octave.Run_GaN_sim(formatted, phi_b, grid_spacing, max_iter, abs_tol, rel_tol, nout=10)
 
         result = {
             "z": to_list(z),
@@ -111,6 +115,9 @@ def _run_simulation(job_id: str, formatted: list, phi_b: float, grid_spacing: fl
             "ns": float(ns),
             "slope": float(slope) if slope is not None else 0.0,
             "iterations_used": int(iterations_used) if iterations_used is not None else max_iter,
+            "final_abs_err": float(final_abs_err) if final_abs_err is not None else 0.0,
+            "final_rel_err": float(final_rel_err) if final_rel_err is not None else 0.0,
+            "converged": bool(converged),
         }
 
         with jobs_lock:
@@ -145,7 +152,7 @@ def _estimate_memory_mb(nodes: int) -> float:
     return round((eigenvectors + sparse_ops) / 1e6, 4)
 
 
-def _run_convergence(job_id: str, formatted: list, phi_b: float, grid_spacings: list, max_iter: int):
+def _run_convergence(job_id: str, formatted: list, phi_b: float, grid_spacings: list, max_iter: int, abs_tol: float, rel_tol: float):
     """
     Mesh / grid-independence sweep: run Run_GaN_sim once per grid spacing.
     Safely utilizes `octave_lock` for the engine and `jobs_lock` for progress updates.
@@ -166,8 +173,8 @@ def _run_convergence(job_id: str, formatted: list, phi_b: float, grid_spacings: 
 
             # Guard the shared Octave instance per iteration
             with octave_lock:
-                z, ec, ev, n, ns, slope, iterations_used = octave.Run_GaN_sim(
-                    formatted, phi_b, float(dz), max_iter, nout=7
+                z, ec, ev, n, ns, slope, iterations_used, final_abs_err, final_rel_err, converged = octave.Run_GaN_sim(
+                    formatted, phi_b, float(dz), max_iter, abs_tol, rel_tol, nout=10
                 )
 
             runtime = time.perf_counter() - t0
@@ -188,6 +195,9 @@ def _run_convergence(job_id: str, formatted: list, phi_b: float, grid_spacings: 
                     "ns": float(ns),
                     "field": float(slope) if slope is not None else 0.0,
                     "iterations": int(iterations_used) if iterations_used is not None else max_iter,
+                    "final_abs_err": float(final_abs_err) if final_abs_err is not None else 0.0,
+                    "final_rel_err": float(final_rel_err) if final_rel_err is not None else 0.0,
+                    "converged": bool(converged),
                     "runtime": round(runtime, 4),
                     "memoryMb": _estimate_memory_mb(nodes),
                     "z": z_list,
@@ -239,7 +249,7 @@ def simulate(req: SimulationRequest, background_tasks: BackgroundTasks):
         jobs[job_id] = {"status": "pending", "result": None, "error": None}
         active_job_count = len(jobs)
 
-    background_tasks.add_task(_run_simulation, job_id, formatted, req.pinningPotential, req.gridSpacing, req.maxIterations)
+    background_tasks.add_task(_run_simulation, job_id, formatted, req.pinningPotential, req.gridSpacing, req.maxIterations, req.absTolerance, req.relTolerance)
 
     print(f"📋 Job {job_id} queued, active jobs: {active_job_count}")
     return {"job_id": job_id}
@@ -294,7 +304,7 @@ def convergence(req: ConvergenceRequest, background_tasks: BackgroundTasks):
         jobs[job_id] = {"status": "pending", "runs": [], "progress": 0, "total": len(req.gridSpacings), "error": None}
 
     background_tasks.add_task(
-        _run_convergence, job_id, formatted, req.pinningPotential, req.gridSpacings, req.maxIterations
+        _run_convergence, job_id, formatted, req.pinningPotential, req.gridSpacings, req.maxIterations, req.absTolerance, req.relTolerance
     )
 
     print(f"📋 Convergence job {job_id} queued ({len(req.gridSpacings)} meshes)")

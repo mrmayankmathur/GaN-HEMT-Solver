@@ -9,6 +9,9 @@ export interface SimulationResult {
   ns: number;
   slope: number;
   iterations_used: number;
+  final_abs_err: number;
+  final_rel_err: number;
+  converged: boolean;
   isRunning: boolean;
 }
 
@@ -29,6 +32,9 @@ export interface ConvergenceRun {
   ns: number; // sheet density cm^-2
   field: number; // average field V/cm
   iterations: number;
+  final_abs_err: number;
+  final_rel_err: number;
+  converged: boolean;
   runtime: number; // seconds
   memoryMb: number; // estimated
   z: number[];
@@ -61,6 +67,8 @@ interface SimulationState {
   dampingFactor: number;
   maxIterations: number;
   pinningPotential: number;
+  absTolerance: number;
+  relTolerance: number;
 
   // Convergence Study
   convergence: ConvergenceState | null;
@@ -77,6 +85,8 @@ interface SimulationState {
   setPinningPotential: (val: number) => void;
   setGridSpacing: (val: number) => void;
   setMaxIterations: (val: number) => void;
+  setAbsTolerance: (val: number) => void;
+  setRelTolerance: (val: number) => void;
   setIsRegionSelectionMode: (val: boolean) => void;
   setEbdLimits: (limits: [number, number] | null) => void;
   setDensityLimits: (limits: [number, number] | null) => void;
@@ -141,6 +151,8 @@ export const useSimulationStore = create<SimulationState>()(
       dampingFactor: 0.1,
       maxIterations: 100,
       pinningPotential: 1.7,
+      absTolerance: 1e-6,
+      relTolerance: 1e-4,
 
       convergence: null,
       convergenceGridSpacings: [5, 4, 3, 2.5, 2, 1.5, 1],
@@ -152,6 +164,8 @@ export const useSimulationStore = create<SimulationState>()(
       setPinningPotential: (val: number) => set({ pinningPotential: val }),
       setGridSpacing: (val: number) => set({ gridSpacing: val }),
       setMaxIterations: (val: number) => set({ maxIterations: val }),
+      setAbsTolerance: (val: number) => set({ absTolerance: val }),
+      setRelTolerance: (val: number) => set({ relTolerance: val }),
 
       setSelectedLayer: (id) => set({ selectedLayerId: id }),
 
@@ -191,7 +205,7 @@ export const useSimulationStore = create<SimulationState>()(
         set((state) => ({
           results: state.results
             ? { ...state.results, isRunning: true }
-            : { z: [], ec: [], ev: [], n: [], ns: 0, slope: 0, iterations_used: 0, isRunning: true },
+            : { z: [], ec: [], ev: [], n: [], ns: 0, slope: 0, iterations_used: 0, final_abs_err: 0, final_rel_err: 0, converged: false, isRunning: true },
           isRegionSelectionMode: false,
           ebdLimits: null,
           densityLimits: null,
@@ -209,6 +223,8 @@ export const useSimulationStore = create<SimulationState>()(
               pinningPotential: get().pinningPotential,
               gridSpacing: get().gridSpacing,
               maxIterations: get().maxIterations,
+              absTolerance: get().absTolerance,
+              relTolerance: get().relTolerance,
             }),
           });
 
@@ -261,6 +277,9 @@ export const useSimulationStore = create<SimulationState>()(
                 ns: data.ns,
                 slope: data.slope,
                 iterations_used: data.iterations_used,
+                final_abs_err: data.final_abs_err,
+                final_rel_err: data.final_rel_err,
+                converged: data.converged,
                 isRunning: false,
               },
               ebdLimits: initialRegion ? [...initialRegion] as [number, number] : null,
@@ -314,6 +333,8 @@ export const useSimulationStore = create<SimulationState>()(
               maxIterations: get().maxIterations,
               gridSpacings: spacings,
               tolerance: get().convergenceTolerance,
+              absTolerance: get().absTolerance,
+              relTolerance: get().relTolerance,
             }),
           });
 
