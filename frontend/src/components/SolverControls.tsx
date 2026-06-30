@@ -99,8 +99,8 @@ export const SolverControls: React.FC = () => {
           <AlertTriangle size={16} className="shrink-0 mt-0.5" />
           <div className="flex flex-col gap-1">
             <span className="font-bold">Max iterations reached without strict convergence.</span>
-            <span>Final Abs Error: {results.final_abs_err.toExponential(2)}</span>
-            <span>Final Rel Error: {results.final_rel_err.toExponential(2)}</span>
+            <span>Final Abs Error: {results.final_abs_err?.toExponential(2) ?? "N/A"}</span>
+            <span>Final Rel Error: {results.final_rel_err?.toExponential(2) ?? "N/A"}</span>
           </div>
         </div>
       )}
