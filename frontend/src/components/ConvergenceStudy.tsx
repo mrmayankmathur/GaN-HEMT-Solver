@@ -329,7 +329,7 @@ export const ConvergenceStudy: React.FC = () => {
               <button
                 type="button"
                 onClick={() => setMetricsDropdownOpen((o) => !o)}
-                className="p-2 text-xs font-medium border border-slate-300/60 dark:border-gray-700 rounded-lg bg-white dark:bg-[#1a1a1a] text-slate-700 dark:text-gray-200 outline-none focus:ring-2 focus:ring-blue-500/30 flex items-center gap-1.5 min-w-[160px] justify-between hover:cursor-pointer"
+                className="p-2 text-xs font-medium border border-slate-300/60 dark:border-gray-700 rounded-lg bg-white dark:bg-[#1a1a1a] text-slate-700 dark:text-gray-200 outline-none focus:ring-2 focus:ring-blue-500/30 flex items-center gap-1.5 min-w-40 justify-between hover:cursor-pointer"
               >
                 <span className="truncate">
                   {selectedMetrics.size === METRICS.length
@@ -549,7 +549,7 @@ export const ConvergenceStudy: React.FC = () => {
           </div>
 
           {/* ===== Convergence chart (multi-metric with secondary Y for runtime) ===== */}
-          <div className="rounded-2xl border border-slate-100 dark:border-white/5 bg-white/40 dark:bg-white/[0.02] p-3">
+          <div className="rounded-2xl border border-slate-100 dark:border-white/5 bg-white/40 dark:bg-white/2 p-3">
             <div className="text-[11px] font-bold text-slate-500 dark:text-gray-400 uppercase tracking-widest px-2 pb-1">
               Convergence Chart
             </div>
@@ -687,7 +687,7 @@ export const ConvergenceStudy: React.FC = () => {
 
           {/* ===== Comparison table (with both Δ columns, refinement #1) ===== */}
           <div className="rounded-2xl border border-slate-100 dark:border-white/5 overflow-hidden">
-            <div className="text-[11px] font-bold text-slate-500 dark:text-gray-400 uppercase tracking-widest px-4 py-2.5 border-b border-slate-100 dark:border-white/5 bg-white/40 dark:bg-white/[0.02]">
+            <div className="text-[11px] font-bold text-slate-500 dark:text-gray-400 uppercase tracking-widest px-4 py-2.5 border-b border-slate-100 dark:border-white/5 bg-white/40 dark:bg-white/2">
               Mesh Comparison ({primaryMeta.label} reference)
             </div>
             <div className="overflow-x-auto">
@@ -715,8 +715,8 @@ export const ConvergenceStudy: React.FC = () => {
                         key={r.gridSpacing}
                         className={`border-b border-slate-50 dark:border-white/5 transition-colors ${
                           stableConverged
-                            ? "bg-emerald-500/[0.04]"
-                            : "hover:bg-slate-50 dark:hover:bg-white/[0.02]"
+                            ? "bg-emerald-500/4"
+                            : "hover:bg-slate-50 dark:hover:bg-white/2"
                         }`}
                       >
                         <td className="px-4 py-2 font-bold text-slate-700 dark:text-slate-200">
@@ -775,7 +775,7 @@ export const ConvergenceStudy: React.FC = () => {
           </div>
 
           {/* Band-diagram overlay */}
-          <div className="rounded-2xl border border-slate-100 dark:border-white/5 bg-white/40 dark:bg-white/[0.02] p-3">
+          <div className="rounded-2xl border border-slate-100 dark:border-white/5 bg-white/40 dark:bg-white/2 p-3">
             <div className="flex items-center justify-between px-2 pb-1">
               <div className="text-[11px] font-bold text-slate-500 dark:text-gray-400 uppercase tracking-widest">
                 Band Diagram Overlay (Ec{showEv ? " + Ev" : ""})
