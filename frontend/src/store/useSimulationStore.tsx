@@ -22,6 +22,28 @@ export interface Layer {
   naVal: number; // cm^-3
 }
 
+// One solve in a convergence sweep (a single grid spacing).
+export interface ConvergenceRun {
+  gridSpacing: number; // Å
+  nodes: number;
+  ns: number; // sheet density cm^-2
+  field: number; // average field V/cm
+  iterations: number;
+  runtime: number; // seconds
+  memoryMb: number; // estimated
+  z: number[];
+  ec: number[];
+  ev: number[];
+  n: number[];
+}
+
+export interface ConvergenceState {
+  runs: ConvergenceRun[];
+  isRunning: boolean;
+  progress: number;
+  total: number;
+}
+
 interface SimulationState {
   theme: "light" | "dark";
   layers: Layer[];
@@ -40,6 +62,11 @@ interface SimulationState {
   maxIterations: number;
   pinningPotential: number;
 
+  // Convergence Study
+  convergence: ConvergenceState | null;
+  convergenceGridSpacings: number[];
+  convergenceTolerance: number; // percent
+
   // Actions
   toggleTheme: () => void;
   setSelectedLayer: (id: string) => void;
@@ -53,6 +80,9 @@ interface SimulationState {
   setIsRegionSelectionMode: (val: boolean) => void;
   setEbdLimits: (limits: [number, number] | null) => void;
   setDensityLimits: (limits: [number, number] | null) => void;
+  setConvergenceGridSpacings: (vals: number[]) => void;
+  setConvergenceTolerance: (val: number) => void;
+  runConvergenceStudy: () => Promise<void>;
 }
 
 const initialLayers: Layer[] = [
@@ -111,6 +141,10 @@ export const useSimulationStore = create<SimulationState>()(
       dampingFactor: 0.1,
       maxIterations: 100,
       pinningPotential: 1.7,
+
+      convergence: null,
+      convergenceGridSpacings: [5, 4, 3, 2.5, 2, 1.5, 1],
+      convergenceTolerance: 1.0,
 
       toggleTheme: () =>
         set((state) => ({ theme: state.theme === "light" ? "dark" : "light" })),
@@ -246,9 +280,119 @@ export const useSimulationStore = create<SimulationState>()(
           set({ results: null });
         }
       },
+
+      setConvergenceGridSpacings: (vals) =>
+        set({ convergenceGridSpacings: vals }),
+      setConvergenceTolerance: (val) => set({ convergenceTolerance: val }),
+
+      runConvergenceStudy: async () => {
+        const spacings = get().convergenceGridSpacings;
+        if (!spacings || spacings.length === 0) {
+          alert("Add at least one grid spacing to run a convergence study.");
+          return;
+        }
+
+        set({
+          convergence: {
+            runs: [],
+            isRunning: true,
+            progress: 0,
+            total: spacings.length,
+          },
+        });
+
+        try {
+          const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8001";
+          console.log("📡 Convergence API URL:", API_URL);
+
+          const startResponse = await fetch(`${API_URL}/convergence`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              layers: get().layers,
+              pinningPotential: get().pinningPotential,
+              maxIterations: get().maxIterations,
+              gridSpacings: spacings,
+              tolerance: get().convergenceTolerance,
+            }),
+          });
+
+          if (!startResponse.ok) {
+            const errBody = await startResponse.text().catch(() => "");
+            throw new Error(
+              `Server responded with ${startResponse.status}: ${errBody}`,
+            );
+          }
+
+          const { job_id } = await startResponse.json();
+          console.log(`📋 Convergence job started: ${job_id}`);
+
+          const POLL_INTERVAL = 3000;
+          const MAX_POLLS = 200; // ~10 minutes max wait
+
+          for (let i = 0; i < MAX_POLLS; i++) {
+            await new Promise((resolve) => setTimeout(resolve, POLL_INTERVAL));
+
+            const pollResponse = await fetch(
+              `${API_URL}/convergence_result/${job_id}`,
+            );
+
+            if (!pollResponse.ok) {
+              if (pollResponse.status === 404) {
+                throw new Error("Job not found on server. It may have expired.");
+              }
+              const errBody = await pollResponse.text().catch(() => "");
+              throw new Error(`Server error ${pollResponse.status}: ${errBody}`);
+            }
+
+            const data = await pollResponse.json();
+
+            if (data.status === "pending") {
+              // Advance the progress bar as meshes complete server-side
+              set((state) => ({
+                convergence: state.convergence
+                  ? {
+                      ...state.convergence,
+                      progress: data.progress ?? state.convergence.progress,
+                      total: data.total ?? state.convergence.total,
+                    }
+                  : state.convergence,
+              }));
+              console.log(`⏳ Convergence ${data.progress}/${data.total}...`);
+              continue;
+            }
+
+            console.log("✅ Convergence study complete!");
+            set({
+              convergence: {
+                runs: data.runs as ConvergenceRun[],
+                isRunning: false,
+                progress: data.runs.length,
+                total: data.runs.length,
+              },
+            });
+            return;
+          }
+
+          throw new Error(
+            "Convergence study timed out after 10 minutes. Please try again.",
+          );
+        } catch (error: unknown) {
+          const msg =
+            error instanceof Error ? error.message : "Unknown error occurred";
+          console.error("❌ Convergence study failed:", msg);
+          alert(`Convergence study failed: ${msg}`);
+          set({ convergence: null });
+        }
+      },
     }),
     {
       name: "hemt-simulation-storage",
+      // Don't persist heavy/transient convergence run curves to localStorage
+      partialize: (state) =>
+        Object.fromEntries(
+          Object.entries(state).filter(([key]) => key !== "convergence"),
+        ) as SimulationState,
     }
   )
 );

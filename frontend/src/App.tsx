@@ -26,28 +26,13 @@ import { LayerStackEditor } from "./components/LayerStackEditor";
 import { SolverControls } from "./components/SolverControls";
 import { BandDiagramChart } from "./components/BandDiagramChart";
 import { ElectronConcentrationChart } from "./components/ElectronConcentrationChart";
+import { ConvergenceStudy } from "./components/ConvergenceStudy";
 import { useSimulationStore } from "./store/useSimulationStore";
 import { toPng } from "html-to-image";
-import { computeRegionMetrics } from "./utils/mathUtils";
+import { computeRegionMetrics, formatScientific } from "./utils/mathUtils";
 
 // Import the user-provided logo image
 import hemtLogo from "./assets/hemtLogo.png";
-
-// Helper for scientific notation formatting
-const formatScientific = (value: number | undefined) => {
-  if (!value)
-    return (
-      <span>
-        0.000 &times; 10<sup>0</sup>
-      </span>
-    );
-  const [base, exponent] = value.toExponential(3).split("e");
-  return (
-    <span>
-      {base} &times; 10<sup>{parseInt(exponent, 10)}</sup>
-    </span>
-  );
-};
 
 function App() {
   const {
@@ -74,7 +59,7 @@ function App() {
     }
   ).default.default;
 
-  const [activeTab, setActiveTab] = useState<"ebd" | "density">("ebd");
+  const [activeTab, setActiveTab] = useState<"ebd" | "density" | "convergence">("ebd");
   const [isCapturing, setIsCapturing] = useState(false);
   const [ebdMetrics, setEbdMetrics] = useState<{
     slope: number;
@@ -339,18 +324,19 @@ function App() {
     </div>
   );
 
+  const tabOrder = ["ebd", "density", "convergence"] as const;
   const slideVariants = {
-    initial: (tab: "ebd" | "density") => ({
+    initial: (tab: (typeof tabOrder)[number]) => ({
       opacity: 0,
-      x: tab === "ebd" ? -30 : 30,
+      x: tabOrder.indexOf(tab) <= tabOrder.indexOf(activeTab) ? -30 : 30,
     }),
     animate: {
       opacity: 1,
       x: 0,
     },
-    exit: (tab: "ebd" | "density") => ({
+    exit: (tab: (typeof tabOrder)[number]) => ({
       opacity: 0,
-      x: tab === "ebd" ? 30 : -30,
+      x: tabOrder.indexOf(tab) <= tabOrder.indexOf(activeTab) ? 30 : -30,
     }),
   };
 
@@ -393,7 +379,8 @@ function App() {
               </div>
 
               <div className="flex items-center gap-4">
-                {/* Export Dropdown */}
+                {/* Export Dropdown — hidden on convergence tab (it has its own CSV export) */}
+                {activeTab !== "convergence" && (
                 <Menu as="div" className="relative inline-block text-left">
                   <div>
                     <MenuButton
@@ -467,6 +454,7 @@ function App() {
                     </MenuItems>
                   </Transition>
                 </Menu>
+                )}
 
                 <button
                   onClick={toggleTheme}
@@ -480,6 +468,8 @@ function App() {
                   )}
                 </button>
 
+                {/* Region selection — only relevant for single-simulation chart tabs */}
+                {activeTab !== "convergence" && (
                 <button
                   onClick={() =>
                     setIsRegionSelectionMode(!isRegionSelectionMode)
@@ -497,6 +487,7 @@ function App() {
                   />
                   Select Region
                 </button>
+                )}
 
                 <div className="bg-white/90 dark:bg-[#18181b]/90 rounded-full flex items-center pl-6 pr-2 py-2 shadow-[0_4px_20px_rgb(0,0,0,0.04)] dark:shadow-none border border-transparent dark:border-white/5 backdrop-blur-md ml-2">
                   <div className="flex flex-col mr-4 w-22 relative">
@@ -583,26 +574,25 @@ function App() {
               <div className="flex-1 flex flex-col pt-22.5 pb-6 px-7 overflow-hidden">
                 {/* Tabs Row */}
                 <div className="flex items-center gap-1 mb-4 bg-white/50 dark:bg-white/5 p-1.5 rounded-2xl w-fit border border-slate-200/50 dark:border-gray-800/50 backdrop-blur-md relative">
-                  {["ebd", "density"].map((tab) => (
+                  {([
+                    { id: "ebd" as const, label: "Energy Band Diagram", activeColor: "text-blue-600 dark:text-blue-400" },
+                    { id: "density" as const, label: "Electron Density n(z)", activeColor: "text-emerald-600 dark:text-emerald-400" },
+                    { id: "convergence" as const, label: "Convergence Study", activeColor: "text-indigo-600 dark:text-indigo-400" },
+                  ]).map((tab) => (
                     <button
-                      key={tab}
-                      onClick={() => setActiveTab(tab as "ebd" | "density")}
+                      key={tab.id}
+                      onClick={() => setActiveTab(tab.id)}
                       className={`relative px-5 py-2 rounded-xl text-sm font-semibold transition-colors duration-300 z-10 ${
-                        activeTab === tab
-                          ? tab === "ebd"
-                            ? "text-blue-600 dark:text-blue-400"
-                            : "text-emerald-600 dark:text-emerald-400"
+                        activeTab === tab.id
+                          ? tab.activeColor
                           : "text-slate-500 hover:text-slate-700 dark:hover:text-slate-300"
                       }`}
                     >
-                      {tab === "ebd"
-                        ? "Energy Band Diagram"
-                        : "Electron Density n(z)"}
+                      {tab.label}
 
-                      {activeTab === tab && (
+                      {activeTab === tab.id && (
                         <motion.div
                           layoutId="active-tab-highlight"
-                          // Changes made in the className below 👇
                           className="absolute inset-0 bg-white dark:bg-gray-400/10 dark:border dark:border-white/5 rounded-xl shadow-sm dark:shadow-sm/40 dark:shadow-gray-700 dark:inset-shadow-sm dark:inset-shadow-gray-900/10 z-[-1]"
                           transition={{
                             type: "spring",
@@ -636,7 +626,9 @@ function App() {
                     >
                       {activeTab === "ebd"
                         ? renderEBDChart()
-                        : renderDensityChart()}
+                        : activeTab === "density"
+                          ? renderDensityChart()
+                          : <ConvergenceStudy />}
                     </motion.div>
                   </AnimatePresence>
                 </section>

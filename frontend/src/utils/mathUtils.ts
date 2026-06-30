@@ -1,4 +1,62 @@
-import type { SimulationResult } from "../store/useSimulationStore";
+import React from "react";
+import type { Layer, SimulationResult } from "../store/useSimulationStore";
+
+/**
+ * Render a number in "base × 10^exp" form for display.
+ * Lifted from App.tsx so the convergence view can share it.
+ */
+export const formatScientific = (value: number | undefined): React.ReactNode => {
+  if (!value) {
+    return React.createElement(
+      "span",
+      null,
+      "0.000 × 10",
+      React.createElement("sup", null, "0"),
+    );
+  }
+  const [base, exponent] = value.toExponential(3).split("e");
+  return React.createElement(
+    "span",
+    null,
+    `${base} × 10`,
+    React.createElement("sup", null, parseInt(exponent, 10)),
+  );
+};
+
+/**
+ * Nyquist grid spacing (Å): half the thinnest physical feature in the stack.
+ * To resolve a layer of thickness t, the mesh must sample it at least twice,
+ * so dz ≤ t/2. Layer thickness is stored in nm → ×10 for Å.
+ */
+export const nyquistSpacing = (layers: Layer[]): number => {
+  const thinnest = layers.reduce(
+    (min, l) => (l.thickness > 0 ? Math.min(min, l.thickness) : min),
+    Infinity,
+  );
+  if (!isFinite(thinnest)) return 2.5;
+  return (thinnest * 10) / 2;
+};
+
+/**
+ * Suggest a coarse → fine geometric sweep of grid spacings (Å) anchored to the
+ * Nyquist spacing. Spans roughly 5 Å (or 2× Nyquist, whichever is larger) down
+ * to ~Nyquist/2, giving points on both sides of the Nyquist reference.
+ */
+export const suggestSweep = (layers: Layer[]): number[] => {
+  const nyq = nyquistSpacing(layers);
+  const coarse = Math.max(5, nyq * 2);
+  const fine = Math.max(0.25, nyq / 2);
+
+  const STEPS = 7;
+  const ratio = Math.pow(fine / coarse, 1 / (STEPS - 1));
+  const sweep: number[] = [];
+  for (let i = 0; i < STEPS; i++) {
+    const val = coarse * Math.pow(ratio, i);
+    sweep.push(Math.round(val * 100) / 100); // 2 decimal places
+  }
+  // De-duplicate in case rounding collapses neighbours
+  return Array.from(new Set(sweep));
+};
 
 /**
  * Computes average electric field and sheet density for a specific sub-region.

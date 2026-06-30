@@ -6,6 +6,7 @@ import os
 import uvicorn
 import uuid
 import traceback
+import time
 
 # Use oct2py instead of matlab.engine
 from oct2py import octave
@@ -68,6 +69,18 @@ class SimulationRequest(BaseModel):
     gridSpacing: float = 2.5
     maxIterations: int = 100
 
+
+class ConvergenceRequest(BaseModel):
+    layers: List[LayerInput]
+    pinningPotential: float = 1.7
+    maxIterations: int = 100
+    gridSpacings: List[float]        # Angstroms, e.g. [5, 4, 3, 2.5, 2, 1.5, 1]
+    tolerance: float = 1.0           # percent, used by the frontend for flagging
+
+
+# Subbands solved per run — kept in sync with Run_GaN_sim.m (num_subbands = 10)
+NUM_SUBBANDS = 10
+
 def _run_simulation(job_id: str, formatted: list, phi_b: float, grid_spacing: float, max_iter: int):
     """
     Run the Octave simulation synchronously.
@@ -99,6 +112,75 @@ def _run_simulation(job_id: str, formatted: list, phi_b: float, grid_spacing: fl
         error_msg = f"{e}\n{traceback.format_exc()}"
         print(f"❌ [{job_id}] Simulation failed: {error_msg}")
         jobs[job_id] = {"status": "error", "result": None, "error": str(e)}
+
+
+def _estimate_memory_mb(nodes: int) -> float:
+    """
+    Rough memory estimate (MB) for a single solve, derived from node count.
+    This is an ESTIMATE, not the true process RSS: a warm, shared Octave
+    instance can't report a meaningful per-run footprint. We size it from the
+    dominant dense allocation (eigenvectors: nodes x num_subbands doubles)
+    plus the sparse Poisson/Schrodinger operators (~O(nodes) nonzeros).
+    """
+    eigvecs = nodes * NUM_SUBBANDS * 8          # dense psi matrix
+    sparse_ops = nodes * 5 * 8                   # tridiagonal-ish operators
+    return round((eigvecs + sparse_ops) / 1e6, 4)
+
+
+def _run_convergence(job_id: str, formatted: list, phi_b: float, grid_spacings: list, max_iter: int):
+    """
+    Mesh / grid-independence sweep: run Run_GaN_sim once per grid spacing,
+    coarse -> fine, recording per-mesh metrics and curves. Reuses the global
+    warm `octave` instance (one solve at a time), and updates `progress` so the
+    frontend can render a live progress bar.
+    """
+    # Coarse -> fine so the convergence chart reads left (coarse) to right (fine)
+    spacings = sorted(grid_spacings, reverse=True)
+    jobs[job_id] = {
+        "status": "pending",
+        "runs": [],
+        "progress": 0,
+        "total": len(spacings),
+        "error": None,
+    }
+
+    try:
+        print(f"📐 [{job_id}] Convergence study started for spacings {spacings}...")
+
+        for dz in spacings:
+            t0 = time.perf_counter()
+            z, ec, ev, n, ns, slope, iterations_used = octave.Run_GaN_sim(
+                formatted, phi_b, float(dz), max_iter, nout=7
+            )
+            runtime = time.perf_counter() - t0
+
+            z_list = to_list(z)
+            nodes = len(z_list)
+
+            jobs[job_id]["runs"].append({
+                "gridSpacing": float(dz),
+                "nodes": nodes,
+                "ns": float(ns),
+                "field": float(slope) if slope is not None else 0.0,
+                "iterations": int(iterations_used) if iterations_used is not None else max_iter,
+                "runtime": round(runtime, 4),
+                "memoryMb": _estimate_memory_mb(nodes),
+                "z": z_list,
+                "ec": to_list(ec),
+                "ev": to_list(ev),
+                "n": to_list(n),
+            })
+            jobs[job_id]["progress"] += 1
+            print(f"   [{job_id}] dz={dz} Å → {nodes} nodes, ns={float(ns):.3e}, {runtime:.2f}s "
+                  f"({jobs[job_id]['progress']}/{jobs[job_id]['total']})")
+
+        jobs[job_id]["status"] = "complete"
+        print(f"✅ [{job_id}] Convergence study complete!")
+
+    except Exception as e:
+        error_msg = f"{e}\n{traceback.format_exc()}"
+        print(f"❌ [{job_id}] Convergence study failed: {error_msg}")
+        jobs[job_id] = {"status": "error", "runs": None, "error": str(e)}
 
 
 @app.post("/simulate")
@@ -141,6 +223,50 @@ def get_result(job_id: str):
         result = job["result"]
         del jobs[job_id]
         return {"status": "complete", **result}
+    else:
+        error_msg = job["error"]
+        del jobs[job_id]
+        raise HTTPException(status_code=500, detail=error_msg)
+
+
+@app.post("/convergence")
+def convergence(req: ConvergenceRequest, background_tasks: BackgroundTasks):
+    """Start a grid-spacing sweep as a background task and return a job ID."""
+    formatted = [
+        {
+            "Al_x": float(l.alFraction),
+            "thickness": float(l.thickness * 10),
+            "Nd_val": float(l.ndVal),
+            "N_trap": 0.0,
+        }
+        for l in req.layers
+    ]
+
+    job_id = str(uuid.uuid4())
+    jobs[job_id] = {"status": "pending", "runs": [], "progress": 0, "total": len(req.gridSpacings), "error": None}
+
+    background_tasks.add_task(
+        _run_convergence, job_id, formatted, req.pinningPotential, req.gridSpacings, req.maxIterations
+    )
+
+    print(f"📋 Convergence job {job_id} queued ({len(req.gridSpacings)} meshes)")
+    return {"job_id": job_id}
+
+
+@app.get("/convergence_result/{job_id}")
+def get_convergence_result(job_id: str):
+    """Poll this endpoint to track sweep progress and retrieve results when done."""
+    if job_id not in jobs:
+        raise HTTPException(status_code=404, detail="Job not found")
+
+    job = jobs[job_id]
+
+    if job["status"] == "pending":
+        return {"status": "pending", "progress": job.get("progress", 0), "total": job.get("total", 0)}
+    elif job["status"] == "complete":
+        runs = job["runs"]
+        del jobs[job_id]
+        return {"status": "complete", "runs": runs}
     else:
         error_msg = job["error"]
         del jobs[job_id]
