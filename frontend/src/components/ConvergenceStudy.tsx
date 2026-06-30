@@ -1,6 +1,6 @@
-import React, { useMemo, useState } from "react";
+import React, { useMemo, useState, useRef, useEffect } from "react";
 import PlotlyPlot from "react-plotly.js";
-import { Play, X, Sparkles, Plus, Download, CheckCircle2, Gauge } from "lucide-react";
+import { Play, X, Sparkles, Plus, Download, CheckCircle2, Gauge, AlertTriangle, ChevronDown, Check } from "lucide-react";
 import {
   useSimulationStore,
   type ConvergenceRun,
@@ -19,6 +19,15 @@ const METRICS: { key: MetricKey; label: string; unit: string; sci: boolean }[] =
   { key: "iterations", label: "Iterations", unit: "", sci: false },
   { key: "runtime", label: "Runtime", unit: "s", sci: false },
 ];
+
+// Metric colours for multi-metric chart traces
+const METRIC_COLORS: Record<MetricKey, string> = {
+  ns: "#3b82f6",
+  field: "#f59e0b",
+  peakField: "#ef4444",
+  iterations: "#8b5cf6",
+  runtime: "#10b981",
+};
 
 // Peak |dEc/dz| for a run, in the app's V/cm convention (eV/nm × 1e4, matching
 // the backend `slope` scaling so peak/avg field share a scale).
@@ -57,6 +66,16 @@ const gradeColor = (t: number): string => {
   return `rgb(${r},${g},${b})`;
 };
 
+/** Row data produced by the analysis pass. */
+interface AnalysisRow {
+  run: ConvergenceRun;
+  val: number;           // metric value for the selected convergence metric
+  pctDelta: number;      // % Δ vs finest mesh
+  pctSuccessive: number | null;  // % Δ vs next-finer mesh (null for the finest)
+  converged: boolean;    // |pctDelta| ≤ tolerance
+  stableConverged: boolean; // converged AND all finer meshes also converged
+}
+
 export const ConvergenceStudy: React.FC = () => {
   const {
     theme,
@@ -70,9 +89,28 @@ export const ConvergenceStudy: React.FC = () => {
     setGridSpacing,
   } = useSimulationStore();
 
-  const [metric, setMetric] = useState<MetricKey>("ns");
+  // Multi-metric checkboxes for the chart (refinement #3)
+  const [selectedMetrics, setSelectedMetrics] = useState<Set<MetricKey>>(
+    () => new Set<MetricKey>(["ns"]),
+  );
+  // The "primary" metric drives the table's %Δ columns and the recommendation.
+  // Default to "ns" — the most critical convergence indicator.
+  const [primaryMetric, setPrimaryMetric] = useState<MetricKey>("ns");
   const [showEv, setShowEv] = useState(false);
   const [newSpacing, setNewSpacing] = useState("");
+  const [metricsDropdownOpen, setMetricsDropdownOpen] = useState(false);
+  const metricsDropdownRef = useRef<HTMLDivElement>(null);
+
+  // Close dropdown on click outside
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (metricsDropdownRef.current && !metricsDropdownRef.current.contains(e.target as Node)) {
+        setMetricsDropdownOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, []);
 
   const isRunning = convergence?.isRunning ?? false;
   const runs = convergence?.runs ?? [];
@@ -81,29 +119,72 @@ export const ConvergenceStudy: React.FC = () => {
   const fontColor = theme === "dark" ? "#a1a1aa" : "#64748b";
   const gridColor = theme === "dark" ? "rgba(255,255,255,0.05)" : "rgba(0,0,0,0.05)";
 
-  const activeMetric = METRICS.find((m) => m.key === metric)!;
+  const primaryMeta = METRICS.find((m) => m.key === primaryMetric)!;
 
-  // --- Derived convergence analysis (coarse → fine; finest is the reference) ---
+  // Toggle a metric in the chart selection; ensure at least one stays selected
+  const toggleMetric = (key: MetricKey) => {
+    setSelectedMetrics((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) {
+        if (next.size > 1) next.delete(key);
+      } else {
+        next.add(key);
+      }
+      return next;
+    });
+  };
+
+  // --- Derived convergence analysis ---
+  // Sorts coarse → fine. Computes both Δ-vs-finest and Δ-vs-next-finer.
+  // Recommendation uses stable convergence (refinement #2):
+  //   coarsest mesh whose error remains below tolerance for ALL finer meshes.
   const analysis = useMemo(() => {
     if (runs.length === 0) return null;
     const sorted = [...runs].sort((a, b) => b.gridSpacing - a.gridSpacing);
     const finest = sorted.reduce((f, r) =>
       r.gridSpacing < f.gridSpacing ? r : f,
     );
-    const refVal = metricValue(finest, metric);
+    const refVal = metricValue(finest, primaryMetric);
 
-    const rows = sorted.map((r) => {
-      const val = metricValue(r, metric);
+    // Build rows with both delta columns
+    const rows: AnalysisRow[] = sorted.map((r, i) => {
+      const val = metricValue(r, primaryMetric);
       const pctDelta = refVal !== 0 ? ((val - refVal) / refVal) * 100 : 0;
       const converged = Math.abs(pctDelta) <= convergenceTolerance;
-      return { run: r, val, pctDelta, converged };
+
+      // Successive delta: compare to the next-finer mesh (i+1 in coarse→fine order)
+      let pctSuccessive: number | null = null;
+      if (i < sorted.length - 1) {
+        const nextFiner = sorted[i + 1];
+        const nextVal = metricValue(nextFiner, primaryMetric);
+        pctSuccessive = nextVal !== 0 ? ((val - nextVal) / nextVal) * 100 : 0;
+      }
+
+      return { run: r, val, pctDelta, pctSuccessive, converged, stableConverged: false };
     });
 
-    // Coarsest mesh that is within tolerance of the finest = best accuracy/cost.
-    const recommended = rows.find((row) => row.converged)?.run ?? finest;
+    // Stable convergence flag: walk from finest → coarsest, propagating
+    // "all finer meshes converged" upward. (refinement #2)
+    let allFinerConverged = true;
+    for (let i = rows.length - 1; i >= 0; i--) {
+      if (rows[i].converged && allFinerConverged) {
+        rows[i].stableConverged = true;
+      } else {
+        allFinerConverged = false;
+        rows[i].stableConverged = false;
+      }
+    }
 
-    return { sorted, finest, refVal, rows, recommended };
-  }, [runs, metric, convergenceTolerance]);
+    // Recommendation: coarsest mesh that is stably converged.
+    const recommended =
+      rows.find((row) => row.stableConverged)?.run ?? finest;
+
+    // Compute the recommended row's error for the summary card
+    const recRow = rows.find((row) => row.run.gridSpacing === recommended.gridSpacing)!;
+    const isStable = recRow.stableConverged;
+
+    return { sorted, finest, refVal, rows, recommended, recRow, isStable };
+  }, [runs, primaryMetric, convergenceTolerance]);
 
   // --- Sweep editor handlers ---
   const addSpacing = () => {
@@ -123,12 +204,25 @@ export const ConvergenceStudy: React.FC = () => {
 
   const applyNyquistSweep = () => setConvergenceGridSpacings(suggestSweep(layers));
 
+  // CSV export with metadata header (refinement #8)
   const exportCSV = () => {
     if (!analysis) return;
-    let csv =
-      "GridSpacing(A),Nodes,SheetDensity(cm-2),AvgField(V/cm),PeakField(V/cm),Iterations,Runtime(s),EstMemory(MB),PctDeltaVsFinest,Converged\n";
-    for (const { run: r, pctDelta, converged } of analysis.rows) {
-      csv += `${r.gridSpacing},${r.nodes},${r.ns},${r.field},${peakFieldOf(r)},${r.iterations},${r.runtime},${r.memoryMb},${pctDelta.toFixed(4)},${converged ? "yes" : "no"}\n`;
+    const now = new Date().toISOString().split("T")[0];
+    let csv = "";
+    // Metadata block
+    csv += `# HEMT Convergence Study\n`;
+    csv += `# Generated: ${now}\n`;
+    csv += `# Tolerance: ${convergenceTolerance}%\n`;
+    csv += `# Nyquist spacing: ${nyquist.toFixed(2)} Å\n`;
+    csv += `# Recommended mesh: ${analysis.recommended.gridSpacing} Å\n`;
+    csv += `# Primary metric: ${primaryMeta.label}\n`;
+    csv += `# Convergence status: ${analysis.isStable ? "Converged" : "Not fully converged"}\n`;
+    csv += `#\n`;
+    // Data header
+    csv +=
+      "GridSpacing(A),Nodes,SheetDensity(cm-2),AvgField(V/cm),PeakField(V/cm),Iterations,Runtime(s),EstSolverMemory(MB),PctDeltaVsFinest,PctDeltaVsNextFiner,StablyConverged\n";
+    for (const { run: r, pctDelta, pctSuccessive, stableConverged } of analysis.rows) {
+      csv += `${r.gridSpacing},${r.nodes},${r.ns},${r.field},${peakFieldOf(r)},${r.iterations},${r.runtime},${r.memoryMb},${pctDelta.toFixed(4)},${pctSuccessive !== null ? pctSuccessive.toFixed(4) : ""},${stableConverged ? "yes" : "no"}\n`;
     }
     const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
     const url = URL.createObjectURL(blob);
@@ -145,6 +239,11 @@ export const ConvergenceStudy: React.FC = () => {
     convergence && convergence.total > 0
       ? (convergence.progress / convergence.total) * 100
       : 0;
+
+  // Determine if runtime is among selected metrics (needs secondary Y-axis)
+  const hasRuntime = selectedMetrics.has("runtime");
+  // "Physical" metrics are everything except runtime
+  const physicalMetrics = [...selectedMetrics].filter((k) => k !== "runtime");
 
   return (
     <div className="flex flex-col h-full w-full overflow-y-auto no-scrollbar">
@@ -204,9 +303,9 @@ export const ConvergenceStudy: React.FC = () => {
           </div>
         </div>
 
-        {/* tolerance + run */}
+        {/* tolerance + metric checkboxes + run */}
         <div className="flex items-end justify-between flex-wrap gap-4">
-          <div className="flex items-end gap-4">
+          <div className="flex items-end gap-4 flex-wrap">
             <div className="flex flex-col gap-1">
               <label className="font-semibold text-[10px] tracking-wider uppercase text-slate-500 dark:text-gray-400 pl-1">
                 Tolerance (%)
@@ -222,13 +321,80 @@ export const ConvergenceStudy: React.FC = () => {
                 className="w-24 p-2 text-xs font-mono border border-slate-300/60 dark:border-gray-700 rounded-lg bg-white dark:bg-[#1a1a1a] text-slate-700 dark:text-gray-200 outline-none focus:ring-2 focus:ring-blue-500/30"
               />
             </div>
+            {/* Multi-metric dropdown selector */}
+            <div className="flex flex-col gap-1 relative" ref={metricsDropdownRef}>
+              <label className="font-semibold text-[10px] tracking-wider uppercase text-slate-500 dark:text-gray-400 pl-1">
+                Chart Metrics
+              </label>
+              <button
+                type="button"
+                onClick={() => setMetricsDropdownOpen((o) => !o)}
+                className="p-2 text-xs font-medium border border-slate-300/60 dark:border-gray-700 rounded-lg bg-white dark:bg-[#1a1a1a] text-slate-700 dark:text-gray-200 outline-none focus:ring-2 focus:ring-blue-500/30 flex items-center gap-1.5 min-w-[160px] justify-between hover:cursor-pointer"
+              >
+                <span className="truncate">
+                  {selectedMetrics.size === METRICS.length
+                    ? "All metrics"
+                    : [...selectedMetrics]
+                        .map((k) => METRICS.find((m) => m.key === k)!.label)
+                        .join(", ")}
+                </span>
+                <ChevronDown
+                  size={13}
+                  className={`shrink-0 opacity-60 transition-transform duration-200 ${
+                    metricsDropdownOpen ? "rotate-180" : ""
+                  }`}
+                />
+              </button>
+              {metricsDropdownOpen && (
+                <div className="absolute top-full left-0 mt-1 z-50 w-56 rounded-xl bg-white/95 dark:bg-[#1a1a1a]/95 backdrop-blur-xl shadow-lg ring-1 ring-black/5 dark:ring-white/10 border border-slate-200/60 dark:border-white/10 py-1 animate-fadeIn">
+                  {METRICS.map((m) => {
+                    const isSelected = selectedMetrics.has(m.key);
+                    const isOnly = isSelected && selectedMetrics.size === 1;
+                    return (
+                      <button
+                        key={m.key}
+                        type="button"
+                        onClick={() => toggleMetric(m.key)}
+                        disabled={isOnly}
+                        className={`w-full flex items-center gap-2.5 px-3 py-2 text-xs font-medium transition-colors hover:cursor-pointer ${
+                          isSelected
+                            ? "text-slate-800 dark:text-slate-100"
+                            : "text-slate-500 dark:text-slate-400"
+                        } ${
+                          isOnly
+                            ? "opacity-50 cursor-not-allowed"
+                            : "hover:bg-slate-50 dark:hover:bg-white/5"
+                        }`}
+                      >
+                        <span
+                          className="w-4 h-4 rounded flex items-center justify-center shrink-0 border transition-colors"
+                          style={{
+                            borderColor: METRIC_COLORS[m.key],
+                            backgroundColor: isSelected ? METRIC_COLORS[m.key] + "20" : "transparent",
+                          }}
+                        >
+                          {isSelected && <Check size={11} strokeWidth={3} style={{ color: METRIC_COLORS[m.key] }} />}
+                        </span>
+                        <span
+                          className="border-b-2 pb-px"
+                          style={{ borderColor: METRIC_COLORS[m.key] }}
+                        >
+                          {m.label}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+            {/* Primary metric for recommendation / table deltas */}
             <div className="flex flex-col gap-1">
               <label className="font-semibold text-[10px] tracking-wider uppercase text-slate-500 dark:text-gray-400 pl-1">
-                Plot Metric
+                Convergence Ref.
               </label>
               <select
-                value={metric}
-                onChange={(e) => setMetric(e.target.value as MetricKey)}
+                value={primaryMetric}
+                onChange={(e) => setPrimaryMetric(e.target.value as MetricKey)}
                 className="p-2 text-xs font-medium border border-slate-300/60 dark:border-gray-700 rounded-lg bg-white dark:bg-[#1a1a1a] text-slate-700 dark:text-gray-200 outline-none focus:ring-2 focus:ring-blue-500/30"
               >
                 {METRICS.map((m) => (
@@ -292,54 +458,139 @@ export const ConvergenceStudy: React.FC = () => {
       {/* ===== Results ===== */}
       {analysis && (
         <div className="flex flex-col gap-6 p-6">
-          {/* Recommendation banner */}
-          <div className="flex items-center justify-between flex-wrap gap-3 rounded-2xl border border-emerald-500/30 bg-emerald-500/5 px-5 py-3">
-            <div className="flex items-center gap-3">
-              <CheckCircle2
-                size={20}
-                className="text-emerald-500 shrink-0"
-              />
-              <div className="text-sm">
-                <span className="font-bold text-slate-700 dark:text-slate-200">
-                  Recommended mesh: {analysis.recommended.gridSpacing} Å
-                </span>
-                <span className="text-slate-500 dark:text-slate-400 ml-2 text-xs">
-                  coarsest within ±{convergenceTolerance}% of the finest mesh •{" "}
-                  {analysis.recommended.nodes} nodes •{" "}
-                  {analysis.recommended.runtime}s
-                </span>
+          {/* ===== Summary card (refinement #5) ===== */}
+          <div
+            className={`rounded-2xl border px-5 py-4 ${
+              analysis.isStable
+                ? "border-emerald-500/30 bg-emerald-500/5"
+                : "border-amber-500/30 bg-amber-500/5"
+            }`}
+          >
+            <div className="flex items-start justify-between flex-wrap gap-4">
+              <div className="flex items-start gap-3">
+                {analysis.isStable ? (
+                  <CheckCircle2
+                    size={22}
+                    className="text-emerald-500 shrink-0 mt-0.5"
+                  />
+                ) : (
+                  <AlertTriangle
+                    size={22}
+                    className="text-amber-500 shrink-0 mt-0.5"
+                  />
+                )}
+                <div>
+                  <div className="text-sm font-bold text-slate-700 dark:text-slate-200 mb-2">
+                    Recommended Mesh
+                  </div>
+                  <div className="grid grid-cols-2 sm:grid-cols-5 gap-x-6 gap-y-2">
+                    <div>
+                      <div className="text-[10px] uppercase font-bold text-slate-400 dark:text-slate-500 tracking-wider">
+                        Grid Spacing
+                      </div>
+                      <div className="text-sm font-mono font-bold text-slate-700 dark:text-slate-200">
+                        {analysis.recommended.gridSpacing} Å
+                      </div>
+                    </div>
+                    <div>
+                      <div className="text-[10px] uppercase font-bold text-slate-400 dark:text-slate-500 tracking-wider">
+                        Nodes
+                      </div>
+                      <div className="text-sm font-mono font-bold text-slate-700 dark:text-slate-200">
+                        {analysis.recommended.nodes.toLocaleString()}
+                      </div>
+                    </div>
+                    <div>
+                      <div className="text-[10px] uppercase font-bold text-slate-400 dark:text-slate-500 tracking-wider">
+                        Runtime
+                      </div>
+                      <div className="text-sm font-mono font-bold text-slate-700 dark:text-slate-200">
+                        {analysis.recommended.runtime} s
+                      </div>
+                    </div>
+                    <div>
+                      <div className="text-[10px] uppercase font-bold text-slate-400 dark:text-slate-500 tracking-wider">
+                        Error ({primaryMeta.label})
+                      </div>
+                      <div className="text-sm font-mono font-bold text-slate-700 dark:text-slate-200">
+                        {Math.abs(analysis.recRow.pctDelta).toFixed(2)}%
+                      </div>
+                    </div>
+                    <div>
+                      <div className="text-[10px] uppercase font-bold text-slate-400 dark:text-slate-500 tracking-wider">
+                        Status
+                      </div>
+                      <div
+                        className={`text-sm font-bold ${
+                          analysis.isStable
+                            ? "text-emerald-600 dark:text-emerald-400"
+                            : "text-amber-600 dark:text-amber-400"
+                        }`}
+                      >
+                        {analysis.isStable ? "Converged" : "Not converged"}
+                      </div>
+                    </div>
+                  </div>
+                  {!analysis.isStable && (
+                    <p className="text-[11px] text-amber-600 dark:text-amber-400 mt-2">
+                      Oscillatory or non-monotonic convergence detected — the recommended
+                      mesh is the finest available. Consider extending the sweep to finer spacings.
+                    </p>
+                  )}
+                </div>
               </div>
+              <button
+                onClick={() => setGridSpacing(analysis.recommended.gridSpacing)}
+                className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 transition-colors hover:cursor-pointer shrink-0"
+              >
+                Apply to Solver
+              </button>
             </div>
-            <button
-              onClick={() => setGridSpacing(analysis.recommended.gridSpacing)}
-              className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 transition-colors hover:cursor-pointer"
-            >
-              Apply to Solver
-            </button>
           </div>
 
-          {/* Convergence chart */}
+          {/* ===== Convergence chart (multi-metric with secondary Y for runtime) ===== */}
           <div className="rounded-2xl border border-slate-100 dark:border-white/5 bg-white/40 dark:bg-white/[0.02] p-3">
             <div className="text-[11px] font-bold text-slate-500 dark:text-gray-400 uppercase tracking-widest px-2 pb-1">
-              {activeMetric.label} vs Grid Spacing
+              Convergence Chart
             </div>
-            <div className="h-72">
+            <div className="h-80">
               <Plot
                 data={[
-                  {
-                    x: analysis.sorted.map((r) => r.gridSpacing),
-                    y: analysis.sorted.map((r) => metricValue(r, metric)),
-                    type: "scatter",
-                    mode: "lines+markers",
-                    name: activeMetric.label,
-                    line: { color: "#3b82f6", width: 2 },
-                    marker: { size: 8, color: "#3b82f6" },
-                  },
+                  // Physical metrics on primary Y-axis
+                  ...physicalMetrics.map((key) => {
+                    const meta = METRICS.find((m) => m.key === key)!;
+                    return {
+                      x: analysis.sorted.map((r) => r.gridSpacing),
+                      y: analysis.sorted.map((r) => metricValue(r, key)),
+                      type: "scatter" as const,
+                      mode: "lines+markers" as const,
+                      name: meta.label,
+                      line: { color: METRIC_COLORS[key], width: 2 },
+                      marker: { size: 7, color: METRIC_COLORS[key] },
+                      yaxis: "y",
+                    };
+                  }),
+                  // Runtime on secondary Y-axis (refinement #6)
+                  ...(hasRuntime
+                    ? [
+                        {
+                          x: analysis.sorted.map((r) => r.gridSpacing),
+                          y: analysis.sorted.map((r) => r.runtime),
+                          type: "scatter" as const,
+                          mode: "lines+markers" as const,
+                          name: "Runtime",
+                          line: { color: METRIC_COLORS.runtime, width: 2, dash: "dot" as const },
+                          marker: { size: 7, color: METRIC_COLORS.runtime },
+                          yaxis: "y2",
+                        },
+                      ]
+                    : []),
                 ]}
                 layout={{
                   autosize: true,
-                  margin: { l: 70, r: 20, t: 10, b: 45 },
-                  showlegend: false,
+                  margin: { l: 70, r: hasRuntime ? 70 : 20, t: 10, b: 45 },
+                  showlegend: true,
+                  legend: { font: { color: fontColor, size: 10 }, orientation: "h", y: -0.2 },
                   xaxis: {
                     title: {
                       text: "Grid Spacing dz (Å) — coarse → fine",
@@ -352,50 +603,78 @@ export const ConvergenceStudy: React.FC = () => {
                   },
                   yaxis: {
                     title: {
-                      text: `${activeMetric.label}${activeMetric.unit ? ` (${activeMetric.unit})` : ""}`,
+                      text:
+                        physicalMetrics.length === 1
+                          ? `${METRICS.find((m) => m.key === physicalMetrics[0])!.label}${METRICS.find((m) => m.key === physicalMetrics[0])!.unit ? ` (${METRICS.find((m) => m.key === physicalMetrics[0])!.unit})` : ""}`
+                          : "Value",
                       font: { color: fontColor, size: 12 },
                     },
                     gridcolor: gridColor,
                     tickfont: { color: fontColor },
                   },
+                  // Secondary Y-axis for runtime (refinement #6)
+                  ...(hasRuntime
+                    ? {
+                        yaxis2: {
+                          title: {
+                            text: "Runtime (s)",
+                            font: { color: METRIC_COLORS.runtime, size: 12 },
+                          },
+                          overlaying: "y" as const,
+                          side: "right" as const,
+                          gridcolor: "transparent",
+                          tickfont: { color: METRIC_COLORS.runtime },
+                        },
+                      }
+                    : {}),
                   plot_bgcolor: "transparent",
                   paper_bgcolor: "transparent",
                   shapes: [
-                    // Tolerance band around the finest-mesh value
+                    // Tolerance band around the finest-mesh value of the primary metric
                     {
-                      type: "rect",
-                      xref: "paper",
-                      yref: "y",
+                      type: "rect" as const,
+                      xref: "paper" as const,
+                      yref: "y" as const,
                       x0: 0,
                       x1: 1,
                       y0: analysis.refVal * (1 - convergenceTolerance / 100),
                       y1: analysis.refVal * (1 + convergenceTolerance / 100),
                       fillcolor: "rgba(16, 185, 129, 0.12)",
                       line: { width: 0 },
-                      layer: "below",
+                      layer: "below" as const,
                     },
                     // Nyquist reference line
                     {
-                      type: "line",
-                      xref: "x",
-                      yref: "paper",
+                      type: "line" as const,
+                      xref: "x" as const,
+                      yref: "paper" as const,
                       x0: nyquist,
                       x1: nyquist,
                       y0: 0,
                       y1: 1,
-                      line: { color: "#6366f1", width: 1.5, dash: "dash" },
+                      line: { color: "#6366f1", width: 1.5, dash: "dash" as const },
                     },
                   ],
+                  // Informative Nyquist annotation (refinement #4)
                   annotations: [
                     {
                       x: Math.log10(nyquist),
                       y: 1,
-                      xref: "x",
-                      yref: "paper",
-                      text: `Nyquist ≈ ${nyquist.toFixed(2)} Å`,
-                      showarrow: false,
+                      xref: "x" as const,
+                      yref: "paper" as const,
+                      text: `<b>Nyquist spacing</b><br>= thinnest layer / 2 ≈ ${nyquist.toFixed(2)} Å<br><i>Recommended max spacing</i>`,
+                      showarrow: true,
+                      arrowhead: 2,
+                      arrowsize: 0.8,
+                      arrowcolor: "#6366f1",
+                      ax: 40,
+                      ay: 20,
                       font: { color: "#6366f1", size: 10 },
-                      yanchor: "bottom",
+                      align: "left" as const,
+                      bgcolor: theme === "dark" ? "rgba(30,30,30,0.85)" : "rgba(255,255,255,0.9)",
+                      bordercolor: "#6366f1",
+                      borderwidth: 1,
+                      borderpad: 4,
                     },
                   ],
                 }}
@@ -406,10 +685,10 @@ export const ConvergenceStudy: React.FC = () => {
             </div>
           </div>
 
-          {/* Comparison table */}
+          {/* ===== Comparison table (with both Δ columns, refinement #1) ===== */}
           <div className="rounded-2xl border border-slate-100 dark:border-white/5 overflow-hidden">
             <div className="text-[11px] font-bold text-slate-500 dark:text-gray-400 uppercase tracking-widest px-4 py-2.5 border-b border-slate-100 dark:border-white/5 bg-white/40 dark:bg-white/[0.02]">
-              Mesh Comparison ({activeMetric.label} reference)
+              Mesh Comparison ({primaryMeta.label} reference)
             </div>
             <div className="overflow-x-auto">
               <table className="w-full text-xs">
@@ -421,20 +700,21 @@ export const ConvergenceStudy: React.FC = () => {
                     <th className="text-right font-semibold px-3 py-2">Avg Field</th>
                     <th className="text-right font-semibold px-3 py-2">Iters</th>
                     <th className="text-right font-semibold px-3 py-2">Runtime</th>
-                    <th className="text-right font-semibold px-3 py-2">Mem (MB)</th>
-                    <th className="text-right font-semibold px-3 py-2">%Δ</th>
-                    <th className="text-center font-semibold px-3 py-2">Conv.</th>
+                    <th className="text-right font-semibold px-3 py-2">Est. Memory (MB)</th>
+                    <th className="text-right font-semibold px-3 py-2" title="Percentage difference compared to the finest mesh">Δ vs Finest</th>
+                    <th className="text-right font-semibold px-3 py-2" title="Percentage difference compared to the next-finer mesh">Δ vs Next Finer</th>
+                    <th className="text-center font-semibold px-3 py-2" title="Stably converged: within tolerance for this AND all finer meshes">Conv.</th>
                   </tr>
                 </thead>
                 <tbody className="font-mono text-slate-600 dark:text-slate-300">
-                  {analysis.rows.map(({ run: r, pctDelta, converged }) => {
+                  {analysis.rows.map(({ run: r, pctDelta, pctSuccessive, stableConverged }) => {
                     const isRec =
                       r.gridSpacing === analysis.recommended.gridSpacing;
                     return (
                       <tr
                         key={r.gridSpacing}
                         className={`border-b border-slate-50 dark:border-white/5 transition-colors ${
-                          converged
+                          stableConverged
                             ? "bg-emerald-500/[0.04]"
                             : "hover:bg-slate-50 dark:hover:bg-white/[0.02]"
                         }`}
@@ -457,9 +737,10 @@ export const ConvergenceStudy: React.FC = () => {
                         <td className="px-3 py-2 text-right">{r.iterations}</td>
                         <td className="px-3 py-2 text-right">{r.runtime}s</td>
                         <td className="px-3 py-2 text-right">{r.memoryMb}</td>
+                        {/* Δ vs finest (refinement #1) */}
                         <td
                           className={`px-3 py-2 text-right ${
-                            converged
+                            Math.abs(pctDelta) <= convergenceTolerance
                               ? "text-emerald-600 dark:text-emerald-400"
                               : "text-amber-600 dark:text-amber-400"
                           }`}
@@ -467,8 +748,23 @@ export const ConvergenceStudy: React.FC = () => {
                           {pctDelta >= 0 ? "+" : ""}
                           {pctDelta.toFixed(2)}%
                         </td>
+                        {/* Δ vs next finer (refinement #1) */}
+                        <td
+                          className={`px-3 py-2 text-right ${
+                            pctSuccessive === null
+                              ? "text-slate-300 dark:text-slate-600"
+                              : Math.abs(pctSuccessive) <= convergenceTolerance
+                                ? "text-emerald-600 dark:text-emerald-400"
+                                : "text-amber-600 dark:text-amber-400"
+                          }`}
+                        >
+                          {pctSuccessive !== null
+                            ? `${pctSuccessive >= 0 ? "+" : ""}${pctSuccessive.toFixed(2)}%`
+                            : "—"}
+                        </td>
+                        {/* Stable convergence indicator (refinement #2) */}
                         <td className="px-3 py-2 text-center">
-                          {converged ? "✓" : "✗"}
+                          {stableConverged ? "✓" : "✗"}
                         </td>
                       </tr>
                     );
