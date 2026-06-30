@@ -150,7 +150,8 @@ function [z_out, Ec_out, Ev_out, n_out, ns_out, slope_out, iterations_used, fina
 
         % --- D. CONVERGENCE CHECK ---
         abs_error = max(abs(phi - phi_old));
-        rel_n_error = max(abs(n_conc - n_old) ./ max(n_old, 1e-20));
+        denom = max(max(abs(n_old), abs(n_conc)), 1e-20);
+        rel_n_error = max(abs(n_conc - n_old) ./ denom);
         
         final_abs_err = abs_error;
         final_rel_err = rel_n_error;
