@@ -1,6 +1,6 @@
 import React from "react";
 import { useSimulationStore } from "../store/useSimulationStore";
-import { Play } from "lucide-react";
+import { Play, AlertTriangle } from "lucide-react";
 
 export const SolverControls: React.FC = () => {
   const store = useSimulationStore();
@@ -62,7 +62,48 @@ export const SolverControls: React.FC = () => {
             className="p-2 border border-slate-300/60 dark:border-gray-700 rounded-lg bg-white dark:bg-[#1a1a1a] text-slate-700 dark:text-gray-200 outline-none focus:ring-2 focus:ring-blue-500/30 transition-all shadow-sm font-mono cursor-text"
           />
         </div>
+        <div className="flex flex-col gap-1.5 focus-within:-translate-y-0.5 transition-transform duration-300">
+          <label className="font-semibold text-[10px] tracking-wider uppercase text-slate-500 dark:text-gray-400 pl-1">
+            Abs Tolerance
+          </label>
+          <input
+            type="number"
+            step="any"
+            value={store.absTolerance}
+            onChange={(e) => {
+              const val = parseFloat(e.target.value);
+              if (!Number.isNaN(val)) store.setAbsTolerance(val);
+            }}
+            className="p-2 border border-slate-300/60 dark:border-gray-700 rounded-lg bg-white dark:bg-[#1a1a1a] text-slate-700 dark:text-gray-200 outline-none focus:ring-2 focus:ring-blue-500/30 transition-all shadow-sm font-mono cursor-text"
+          />
+        </div>
+        <div className="flex flex-col gap-1.5 focus-within:-translate-y-0.5 transition-transform duration-300">
+          <label className="font-semibold text-[10px] tracking-wider uppercase text-slate-500 dark:text-gray-400 pl-1">
+            Rel Tolerance
+          </label>
+          <input
+            type="number"
+            step="any"
+            value={store.relTolerance}
+            onChange={(e) => {
+              const val = parseFloat(e.target.value);
+              if (!Number.isNaN(val)) store.setRelTolerance(val);
+            }}
+            className="p-2 border border-slate-300/60 dark:border-gray-700 rounded-lg bg-white dark:bg-[#1a1a1a] text-slate-700 dark:text-gray-200 outline-none focus:ring-2 focus:ring-blue-500/30 transition-all shadow-sm font-mono cursor-text"
+          />
+        </div>
       </div>
+
+      {results && !results.isRunning && !results.converged && (
+        <div className="flex items-start gap-2 bg-yellow-500/10 border border-yellow-500/30 rounded-lg p-3 text-yellow-700 dark:text-yellow-400 text-xs mb-2">
+          <AlertTriangle size={16} className="shrink-0 mt-0.5" />
+          <div className="flex flex-col gap-1">
+            <span className="font-bold">Max iterations reached without strict convergence.</span>
+            <span>Final Abs Error: {results.final_abs_err?.toExponential(2) ?? "N/A"}</span>
+            <span>Final Rel Error: {results.final_rel_err?.toExponential(2) ?? "N/A"}</span>
+          </div>
+        </div>
+      )}
 
       <button
         onClick={runSimulation}

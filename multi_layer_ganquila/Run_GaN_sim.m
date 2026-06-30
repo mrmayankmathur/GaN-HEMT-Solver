@@ -1,4 +1,4 @@
-function [z_out, Ec_out, Ev_out, n_out, ns_out, slope_out, iterations_used] = Run_GaN_sim(input_layers, phi_b, grid_spacing, max_iter)
+function [z_out, Ec_out, Ev_out, n_out, ns_out, slope_out, iterations_used, final_abs_err, final_rel_err, converged] = Run_GaN_sim(input_layers, phi_b, grid_spacing, max_iter, abs_tol, rel_tol)
     % Run_GaN_sim: Self-consistent solver for HEMT stacks
 
     global aquila_control
@@ -12,6 +12,12 @@ function [z_out, Ec_out, Ev_out, n_out, ns_out, slope_out, iterations_used] = Ru
     end
     if nargin < 4
         max_iter = 100; % Default max iterations if not provided
+    end
+    if nargin < 5
+        abs_tol = 1e-6; % Default absolute tolerance
+    end
+    if nargin < 6
+        rel_tol = 1e-4; % Default relative tolerance
     end
 
 
@@ -85,11 +91,14 @@ function [z_out, Ec_out, Ev_out, n_out, ns_out, slope_out, iterations_used] = Ru
     Nd_unit = Nd * 1e-24;
     num_subbands = 10;
 
-    tolerance = 1e-6;
     iterations_used = max_iter;
+    final_abs_err = 0;
+    final_rel_err = 0;
+    converged = 0;
 
     for iter = 1:max_iter
         phi_old = phi;
+        n_old = n_conc;
 
         % --- A. POISSON ---
         A = sparse(N, N);
@@ -140,9 +149,16 @@ function [z_out, Ec_out, Ev_out, n_out, ns_out, slope_out, iterations_used] = Ru
         n_conc = (1-damping)*n_conc + damping*n_new;
 
         % --- D. CONVERGENCE CHECK ---
-        max_error = max(abs(phi - phi_old));
-        if max_error < tolerance
+        abs_error = max(abs(phi - phi_old));
+        denom = max(max(abs(n_old), abs(n_conc)), 1e-20);
+        rel_n_error = max(abs(n_conc - n_old) ./ denom);
+        
+        final_abs_err = abs_error;
+        final_rel_err = rel_n_error;
+        
+        if abs_error < abs_tol && rel_n_error < rel_tol
             iterations_used = iter;
+            converged = 1;
             break;
         end
     end
