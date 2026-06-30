@@ -2,10 +2,12 @@ from fastapi import FastAPI, HTTPException, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import List, Dict, Any
+from pathlib import Path
 import os
 import uvicorn
 import uuid
 import traceback
+import threading
 import time
 
 # Use oct2py instead of matlab.engine
@@ -13,6 +15,7 @@ from oct2py import octave
 
 app = FastAPI()
 
+# noinspection PyTypeChecker
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -22,19 +25,24 @@ app.add_middleware(
 )
 
 print("🚀 Starting GNU Octave Engine...")
-# Link to the MATLAB (.m) folder dynamically
-project_path = os.path.abspath(
-    os.path.join(os.path.dirname(__file__), "..", "multi_layer_ganquila")
-)
+
+# Use modern pathlib for type-safe path resolution
+project_path = Path(__file__).resolve().parent.parent / "multi_layer_ganquila"
 
 try:
-    octave.addpath(project_path)
+    octave.addpath(str(project_path))
     print(f"✅ Octave Path Linked: {project_path}")
-except Exception as e:
+except Exception as init_err:
     print(
-        f"⚠️ Warning: Could not link path {project_path}. Make sure it exists! Error: {e}"
+        f"⚠️ Warning: Could not link path {project_path}. Make sure it exists! Error: {init_err}"
     )
 
+
+# --- Thread Safety Locks ---
+# Locks Octave engine to prevent concurrent process I/O crashes (Reentrant)
+octave_lock = threading.RLock()
+# Locks job dictionary to prevent race conditions on progress updates and reads (Reentrant)
+jobs_lock = threading.RLock()
 
 # --- In-memory job store ---
 # Each job: { "status": "pending"|"complete"|"error", "result": {...}|None, "error": str|None }
@@ -86,15 +94,14 @@ def _run_simulation(job_id: str, formatted: list, phi_b: float, grid_spacing: fl
     Run the Octave simulation synchronously.
     FastAPI's BackgroundTasks runs sync functions in a thread pool via anyio,
     so this won't block the event loop and HTTP responses keep flowing.
-    We reuse the global `octave` instance (created at module import) instead of
-    spawning a new Oct2Py — this avoids crashes from pexpect/signal handler
-    conflicts in threads.
+    We reuse the global `octave` instance safely via `octave_lock`.
     """
     try:
         print(f"🔬 [{job_id}] Simulation started...")
 
-        # Use the global octave instance — safe because we run one sim at a time
-        z, ec, ev, n, ns, slope, iterations_used = octave.Run_GaN_sim(formatted, phi_b, grid_spacing, max_iter, nout=7)
+        # Guard the shared Octave instance
+        with octave_lock:
+            z, ec, ev, n, ns, slope, iterations_used = octave.Run_GaN_sim(formatted, phi_b, grid_spacing, max_iter, nout=7)
 
         result = {
             "z": to_list(z),
@@ -105,82 +112,112 @@ def _run_simulation(job_id: str, formatted: list, phi_b: float, grid_spacing: fl
             "slope": float(slope) if slope is not None else 0.0,
             "iterations_used": int(iterations_used) if iterations_used is not None else max_iter,
         }
-        jobs[job_id] = {"status": "complete", "result": result, "error": None}
+
+        with jobs_lock:
+            if job_id not in jobs:
+                print(f"⚠️ [{job_id}] Simulation finished, but job was deleted. Discarding result.")
+                return
+
+            job = jobs[job_id]
+            job["status"] = "complete"
+            job["result"] = result
+            job["error"] = None
+
         print(f"✅ [{job_id}] Simulation complete!")
 
-    except Exception as e:
-        error_msg = f"{e}\n{traceback.format_exc()}"
+    except Exception as sim_err:
+        error_msg = f"{sim_err}\n{traceback.format_exc()}"
         print(f"❌ [{job_id}] Simulation failed: {error_msg}")
-        jobs[job_id] = {"status": "error", "result": None, "error": str(e)}
+        with jobs_lock:
+            if job_id in jobs:
+                job = jobs[job_id]
+                job["status"] = "error"
+                job["result"] = None
+                job["error"] = str(sim_err)
 
 
 def _estimate_memory_mb(nodes: int) -> float:
     """
     Rough memory estimate (MB) for a single solve, derived from node count.
-    This is an ESTIMATE, not the true process RSS: a warm, shared Octave
-    instance can't report a meaningful per-run footprint. We size it from the
-    dominant dense allocation (eigenvectors: nodes x num_subbands doubles)
-    plus the sparse Poisson/Schrodinger operators (~O(nodes) nonzeros).
     """
-    eigvecs = nodes * NUM_SUBBANDS * 8          # dense psi matrix
-    sparse_ops = nodes * 5 * 8                   # tridiagonal-ish operators
-    return round((eigvecs + sparse_ops) / 1e6, 4)
+    eigenvectors = nodes * NUM_SUBBANDS * 8          # dense psi matrix
+    sparse_ops = nodes * 5 * 8                       # tridiagonal-ish operators
+    return round((eigenvectors + sparse_ops) / 1e6, 4)
 
 
 def _run_convergence(job_id: str, formatted: list, phi_b: float, grid_spacings: list, max_iter: int):
     """
-    Mesh / grid-independence sweep: run Run_GaN_sim once per grid spacing,
-    coarse -> fine, recording per-mesh metrics and curves. Reuses the global
-    warm `octave` instance (one solve at a time), and updates `progress` so the
-    frontend can render a live progress bar.
+    Mesh / grid-independence sweep: run Run_GaN_sim once per grid spacing.
+    Safely utilizes `octave_lock` for the engine and `jobs_lock` for progress updates.
     """
-    # Coarse -> fine so the convergence chart reads left (coarse) to right (fine)
     spacings = sorted(grid_spacings, reverse=True)
-    jobs[job_id] = {
-        "status": "pending",
-        "runs": [],
-        "progress": 0,
-        "total": len(spacings),
-        "error": None,
-    }
 
     try:
         print(f"📐 [{job_id}] Convergence study started for spacings {spacings}...")
 
         for dz in spacings:
+            # Check if job was cancelled before starting a new heavy mesh
+            with jobs_lock:
+                if job_id not in jobs:
+                    print(f"⚠️ [{job_id}] Convergence job deleted mid-run. Aborting remaining meshes.")
+                    return
+
             t0 = time.perf_counter()
-            z, ec, ev, n, ns, slope, iterations_used = octave.Run_GaN_sim(
-                formatted, phi_b, float(dz), max_iter, nout=7
-            )
+
+            # Guard the shared Octave instance per iteration
+            with octave_lock:
+                z, ec, ev, n, ns, slope, iterations_used = octave.Run_GaN_sim(
+                    formatted, phi_b, float(dz), max_iter, nout=7
+                )
+
             runtime = time.perf_counter() - t0
 
             z_list = to_list(z)
             nodes = len(z_list)
 
-            jobs[job_id]["runs"].append({
-                "gridSpacing": float(dz),
-                "nodes": nodes,
-                "ns": float(ns),
-                "field": float(slope) if slope is not None else 0.0,
-                "iterations": int(iterations_used) if iterations_used is not None else max_iter,
-                "runtime": round(runtime, 4),
-                "memoryMb": _estimate_memory_mb(nodes),
-                "z": z_list,
-                "ec": to_list(ec),
-                "ev": to_list(ev),
-                "n": to_list(n),
-            })
-            jobs[job_id]["progress"] += 1
-            print(f"   [{job_id}] dz={dz} Å → {nodes} nodes, ns={float(ns):.3e}, {runtime:.2f}s "
-                  f"({jobs[job_id]['progress']}/{jobs[job_id]['total']})")
+            # Guard job dictionary mutation
+            with jobs_lock:
+                if job_id not in jobs:
+                    print(f"⚠️ [{job_id}] Convergence job deleted mid-run. Aborting remaining meshes.")
+                    return
 
-        jobs[job_id]["status"] = "complete"
+                job = jobs[job_id]
+                job["runs"].append({
+                    "gridSpacing": float(dz),
+                    "nodes": nodes,
+                    "ns": float(ns),
+                    "field": float(slope) if slope is not None else 0.0,
+                    "iterations": int(iterations_used) if iterations_used is not None else max_iter,
+                    "runtime": round(runtime, 4),
+                    "memoryMb": _estimate_memory_mb(nodes),
+                    "z": z_list,
+                    "ec": to_list(ec),
+                    "ev": to_list(ev),
+                    "n": to_list(n),
+                })
+                job["progress"] += 1
+
+                current_progress = job["progress"]
+                total_progress = job["total"]
+
+            print(f"   [{job_id}] dz={dz} Å → {nodes} nodes, ns={float(ns):.3e}, {runtime:.2f}s "
+                  f"({current_progress}/{total_progress})")
+
+        with jobs_lock:
+            if job_id in jobs:
+                jobs[job_id]["status"] = "complete"
+
         print(f"✅ [{job_id}] Convergence study complete!")
 
-    except Exception as e:
-        error_msg = f"{e}\n{traceback.format_exc()}"
+    except Exception as conv_err:
+        error_msg = f"{conv_err}\n{traceback.format_exc()}"
         print(f"❌ [{job_id}] Convergence study failed: {error_msg}")
-        jobs[job_id] = {"status": "error", "runs": None, "error": str(e)}
+        with jobs_lock:
+            if job_id in jobs:
+                job = jobs[job_id]
+                job["status"] = "error"
+                job["runs"] = None
+                job["error"] = str(conv_err)
 
 
 @app.post("/simulate")
@@ -197,36 +234,45 @@ def simulate(req: SimulationRequest, background_tasks: BackgroundTasks):
     ]
 
     job_id = str(uuid.uuid4())
-    jobs[job_id] = {"status": "pending", "result": None, "error": None}
 
-    # FastAPI BackgroundTasks runs sync functions in a thread pool automatically
+    with jobs_lock:
+        jobs[job_id] = {"status": "pending", "result": None, "error": None}
+        active_job_count = len(jobs)
+
     background_tasks.add_task(_run_simulation, job_id, formatted, req.pinningPotential, req.gridSpacing, req.maxIterations)
 
-    print(f"📋 Job {job_id} queued, active jobs: {list(jobs.keys())}")
+    print(f"📋 Job {job_id} queued, active jobs: {active_job_count}")
     return {"job_id": job_id}
 
 
 @app.get("/result/{job_id}")
 def get_result(job_id: str):
     """Poll this endpoint to check if the simulation is done."""
-    print(f"🔍 Polling job {job_id}, active jobs: {list(jobs.keys())}")
+    response: Dict[str, Any]
 
-    if job_id not in jobs:
+    with jobs_lock:
+        if job_id not in jobs:
+            response = {"status": "not_found"}
+        else:
+            job = jobs[job_id]
+            if job["status"] == "pending":
+                response = {"status": "pending"}
+            elif job["status"] == "complete":
+                result = job["result"]
+                del jobs[job_id]
+                response = {"status": "complete", **result}
+            else:
+                error_msg = job["error"]
+                del jobs[job_id]
+                response = {"status": "error", "detail": error_msg}
+
+    # Handle HTTP Exceptions entirely outside the lock
+    if response.get("status") == "not_found":
         raise HTTPException(status_code=404, detail="Job not found")
+    if response.get("status") == "error":
+        raise HTTPException(status_code=500, detail=response["detail"])
 
-    job = jobs[job_id]
-
-    if job["status"] == "pending":
-        return {"status": "pending"}
-    elif job["status"] == "complete":
-        # Clean up the job from memory after returning results
-        result = job["result"]
-        del jobs[job_id]
-        return {"status": "complete", **result}
-    else:
-        error_msg = job["error"]
-        del jobs[job_id]
-        raise HTTPException(status_code=500, detail=error_msg)
+    return response
 
 
 @app.post("/convergence")
@@ -243,7 +289,9 @@ def convergence(req: ConvergenceRequest, background_tasks: BackgroundTasks):
     ]
 
     job_id = str(uuid.uuid4())
-    jobs[job_id] = {"status": "pending", "runs": [], "progress": 0, "total": len(req.gridSpacings), "error": None}
+
+    with jobs_lock:
+        jobs[job_id] = {"status": "pending", "runs": [], "progress": 0, "total": len(req.gridSpacings), "error": None}
 
     background_tasks.add_task(
         _run_convergence, job_id, formatted, req.pinningPotential, req.gridSpacings, req.maxIterations
@@ -256,27 +304,39 @@ def convergence(req: ConvergenceRequest, background_tasks: BackgroundTasks):
 @app.get("/convergence_result/{job_id}")
 def get_convergence_result(job_id: str):
     """Poll this endpoint to track sweep progress and retrieve results when done."""
-    if job_id not in jobs:
+    response: Dict[str, Any]
+
+    with jobs_lock:
+        if job_id not in jobs:
+            response = {"status": "not_found"}
+        else:
+            job = jobs[job_id]
+            if job["status"] == "pending":
+                response = {"status": "pending", "progress": job.get("progress", 0), "total": job.get("total", 0)}
+            elif job["status"] == "complete":
+                runs = job["runs"]
+                del jobs[job_id]
+                response = {"status": "complete", "runs": runs}
+            else:
+                error_msg = job["error"]
+                del jobs[job_id]
+                response = {"status": "error", "detail": error_msg}
+
+    # Handle HTTP Exceptions entirely outside the lock
+    if response.get("status") == "not_found":
         raise HTTPException(status_code=404, detail="Job not found")
+    if response.get("status") == "error":
+        raise HTTPException(status_code=500, detail=response["detail"])
 
-    job = jobs[job_id]
-
-    if job["status"] == "pending":
-        return {"status": "pending", "progress": job.get("progress", 0), "total": job.get("total", 0)}
-    elif job["status"] == "complete":
-        runs = job["runs"]
-        del jobs[job_id]
-        return {"status": "complete", "runs": runs}
-    else:
-        error_msg = job["error"]
-        del jobs[job_id]
-        raise HTTPException(status_code=500, detail=error_msg)
+    return response
 
 
 @app.get("/health")
 def health():
     """Health check — also shows active job count for debugging."""
-    return {"status": "ok", "active_jobs": len(jobs)}
+    with jobs_lock:
+        active_jobs = len(jobs)
+    return {"status": "ok", "active_jobs": active_jobs}
 
 
 if __name__ == "__main__":
