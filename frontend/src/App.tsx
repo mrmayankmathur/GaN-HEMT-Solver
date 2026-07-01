@@ -10,6 +10,7 @@ import {
   ChevronDown,
   FileImage,
   FileSpreadsheet,
+  FileJson,
   Target,
   RotateCcw,
   ExternalLink,
@@ -46,6 +47,14 @@ function App() {
     setEbdLimits,
     densityLimits,
     setDensityLimits,
+    layers,
+    gridSpacing,
+    numSubbands,
+    dampingFactor,
+    maxIterations,
+    pinningPotential,
+    absTolerance,
+    relTolerance,
   } = useSimulationStore();
 
   const Lottie = (
@@ -69,6 +78,19 @@ function App() {
     slope: number;
     ns: number;
   } | null>(null);
+  const [direction, setDirection] = useState(1);
+
+  const handleTabChange = (newTab: Tab) => {
+    // Prevent re-triggering if clicking the active tab
+    if (newTab === activeTab) return;
+
+    const currentIndex = tabOrder.indexOf(activeTab);
+    const newIndex = tabOrder.indexOf(newTab);
+
+    // If the new index is higher, we move right (1). If lower, we move left (-1).
+    setDirection(newIndex > currentIndex ? 1 : -1);
+    setActiveTab(newTab);
+  };
 
   const viewMode = useMemo(() => {
     return new URLSearchParams(window.location.search).get("view");
@@ -153,6 +175,41 @@ function App() {
     csvLink.click();
     document.body.removeChild(csvLink);
     URL.revokeObjectURL(csvUrl);
+  };
+
+  const handleExportJSON = () => {
+    const config = {
+      layers: layers.map(l => ({
+        id: l.id,
+        name: l.name,
+        material: l.material,
+        alFraction: l.alFraction,
+        thickness: `${l.thickness} nm`,
+        ndVal: `${l.ndVal} cm^-3`,
+        naVal: `${l.naVal} cm^-3`
+      })),
+      solverParameters: {
+        gridSpacing: `${gridSpacing} Å`,
+        numSubbands,
+        dampingFactor,
+        maxIterations,
+        pinningPotential: `${pinningPotential} eV`,
+        absTolerance: `${absTolerance} V`,
+        relTolerance: relTolerance
+      }
+    };
+
+    const jsonContent = JSON.stringify(config, null, 2);
+    const jsonBlob = new Blob([jsonContent], { type: "application/json;charset=utf-8;" });
+    const jsonUrl = URL.createObjectURL(jsonBlob);
+    const jsonLink = document.createElement("a");
+    jsonLink.href = jsonUrl;
+    jsonLink.download = "HEMT_Simulation_Config.json";
+
+    document.body.appendChild(jsonLink);
+    jsonLink.click();
+    document.body.removeChild(jsonLink);
+    URL.revokeObjectURL(jsonUrl);
   };
 
   const handleEbdInputChange = (index: 0 | 1, val: string) => {
@@ -325,18 +382,21 @@ function App() {
   );
 
   const tabOrder = ["ebd", "density", "convergence"] as const;
+  type Tab = (typeof tabOrder)[number];
+
   const slideVariants = {
-    initial: (tab: (typeof tabOrder)[number]) => ({
+    // 'direction' is passed via the `custom` prop in Framer Motion
+    initial: (direction: number) => ({
       opacity: 0,
-      x: tabOrder.indexOf(tab) <= tabOrder.indexOf(activeTab) ? -30 : 30,
+      x: direction > 0 ? 30 : -30, // Enter from right if moving right, else left
     }),
     animate: {
       opacity: 1,
       x: 0,
     },
-    exit: (tab: (typeof tabOrder)[number]) => ({
+    exit: (direction: number) => ({
       opacity: 0,
-      x: tabOrder.indexOf(tab) <= tabOrder.indexOf(activeTab) ? 30 : -30,
+      x: direction > 0 ? -30 : 30, // Exit to left if moving right, else right
     }),
   };
 
@@ -412,7 +472,7 @@ function App() {
                     leaveFrom="transform opacity-100 scale-100"
                     leaveTo="transform opacity-0 scale-95"
                   >
-                    <MenuItems className="absolute right-0 mt-2 w-48 origin-top-right divide-y divide-slate-100 dark:divide-white/5 rounded-2xl bg-white/95 dark:bg-[#18181b]/95 shadow-lg ring-1 ring-black/5 dark:ring-white/10 focus:outline-none backdrop-blur-xl border border-white/40 dark:border-white/5 z-50">
+                    <MenuItems className="absolute right-0 mt-2 w-52 origin-top-right divide-y divide-slate-100 dark:divide-white/5 rounded-2xl bg-white/95 dark:bg-[#18181b]/95 shadow-lg ring-1 ring-black/5 dark:ring-white/10 focus:outline-none backdrop-blur-xl border border-white/40 dark:border-white/5 z-50">
                       <div className="px-1 py-1 ">
                         <MenuItem>
                           {({ focus }) => (
@@ -447,6 +507,24 @@ function App() {
                                 aria-hidden="true"
                               />
                               Export Data (CSV)
+                            </button>
+                          )}
+                        </MenuItem>
+                        <MenuItem>
+                          {({ focus }) => (
+                            <button
+                              onClick={handleExportJSON}
+                              className={`${
+                                focus
+                                  ? "bg-amber-500/10 text-amber-600 dark:text-amber-400"
+                                  : "text-slate-700 dark:text-slate-300"
+                              } group flex w-full items-center rounded-xl px-3 py-2.5 text-sm font-medium transition-colors`}
+                            >
+                              <FileJson
+                                className="mr-3 h-4 w-4 opacity-70 group-hover:opacity-100"
+                                aria-hidden="true"
+                              />
+                              Export Config (JSON)
                             </button>
                           )}
                         </MenuItem>
@@ -581,7 +659,7 @@ function App() {
                   ]).map((tab) => (
                     <button
                       key={tab.id}
-                      onClick={() => setActiveTab(tab.id)}
+                      onClick={() => handleTabChange(tab.id)}
                       className={`relative px-5 py-2 rounded-xl text-sm font-semibold transition-colors duration-300 z-10 ${
                         activeTab === tab.id
                           ? tab.activeColor
@@ -612,11 +690,11 @@ function App() {
                   <AnimatePresence
                     mode="wait"
                     initial={false}
-                    custom={activeTab}
+                    custom={direction}
                   >
                     <motion.div
                       key={activeTab}
-                      custom={activeTab}
+                      custom={direction}
                       variants={slideVariants}
                       initial="initial"
                       animate="animate"

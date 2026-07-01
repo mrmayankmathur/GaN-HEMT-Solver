@@ -1,5 +1,29 @@
 function [z_out, Ec_out, Ev_out, n_out, ns_out, slope_out, iterations_used, final_abs_err, final_rel_err, converged] = Run_GaN_sim(input_layers, phi_b, grid_spacing, max_iter, abs_tol, rel_tol)
-    % Run_GaN_sim: Self-consistent solver for HEMT stacks
+    % Run_GaN_sim: Self-consistent 1D Schrödinger-Poisson solver for AlGaN/GaN HEMT stacks.
+    %
+    % This function calculates the energy band diagram (EBD), electron concentration, 
+    % and sheet carrier density for a given multi-layer semiconductor stack by 
+    % self-consistently solving the 1D Poisson and Schrödinger equations.
+    %
+    % INPUTS:
+    %   input_layers - Cell array of struct containing layer properties (Al_x, thickness, Nd_val, etc.)
+    %   phi_b        - Surface pinning potential (eV) [default: 1.7]
+    %   grid_spacing - Spatial discretization step size (Å) [default: 2.5]
+    %   max_iter     - Maximum number of self-consistent iterations allowed [default: 100]
+    %   abs_tol      - Absolute tolerance for electrostatic potential (V) convergence [default: 1e-6]
+    %   rel_tol      - Relative tolerance for electron density convergence [default: 1e-4]
+    %
+    % OUTPUTS:
+    %   z_out           - Spatial grid vector (nm)
+    %   Ec_out          - Conduction band edge (eV)
+    %   Ev_out          - Valence band edge (eV)
+    %   n_out           - Electron volume concentration (cm^-3)
+    %   ns_out          - Total 2D sheet carrier density (cm^-2)
+    %   slope_out       - Average internal electric field (V/cm) across the entire device
+    %   iterations_used - Number of iterations used before converging (or max_iter)
+    %   final_abs_err   - The final absolute error of the potential before exiting
+    %   final_rel_err   - The final relative error of the carrier density before exiting
+    %   converged       - Boolean flag indicating if strict convergence was reached (1 or 0)
 
     global aquila_control
     aquila_control.verbose = 0;
